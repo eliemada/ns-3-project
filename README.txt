@@ -16,4 +16,4 @@ Install fresh:
   ./ns3 configure --enable-examples -- -G Ninja
   ./ns3 build
 Run:
-  ./ns3 run "http-cache-scenario --nReq=100 --interval=0.2 --ttl=3 --cacheCap=5 --numContent=10 --zipf=true --zipfS=1.0 --originDelay=5 --csv=metrics.csv"
+  ./ns3 run http-cache-scenario -- --nReq=100 --interval=0.2 --ttl=3 --cacheCap=5 --numContent=10 --zipf=true --zipfS=1.0 --originDelay=5 --csv=metrics.csv
