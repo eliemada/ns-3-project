@@ -13,7 +13,7 @@ int main(int argc, char** argv){
   Time::SetResolution(Time::NS);
   uint32_t nReq = 100; double interval=0.5; uint32_t cacheCap=4; double ttl=5.0;
   std::string resource = "/file-A"; std::string csv = "client_metrics.csv";
-  uint32_t numContent = 1; bool zipf = false; double zipfS = 1.0; uint32_t originDelay = 1;
+  uint32_t numContent = 1; bool zipf = false; double zipfS = 1.0; uint32_t originDelay = 1; uint32_t cacheDelay = 1;
   CommandLine cmd;
   cmd.AddValue("nReq", "Total client requests", nReq);
   cmd.AddValue("interval", "Seconds between requests", interval);
@@ -24,6 +24,7 @@ int main(int argc, char** argv){
   cmd.AddValue("numContent", "Number of distinct content items (1 = fixed resource)", numContent);
   cmd.AddValue("zipf", "Use Zipf popularity over resources", zipf);
   cmd.AddValue("zipfS", "Zipf exponent s (>0)", zipfS);
+  cmd.AddValue("cacheDelay", "Cache processing delay for hits (ms)", cacheDelay);
   cmd.AddValue("originDelay", "Origin processing delay (ms)", originDelay);
   cmd.Parse(argc, argv);
 
@@ -53,6 +54,7 @@ int main(int argc, char** argv){
   cache->SetOrigin(Address(if12.GetAddress(1)), cacheToOriginPort);
   cache->SetTtl(Seconds(ttl));
   cache->SetCapacity(cacheCap);
+  cache->SetCacheDelay(MilliSeconds(cacheDelay));
   nodes.Get(1)->AddApplication(cache);
   cache->SetStartTime(Seconds(0.2)); cache->SetStopTime(Seconds(100));
 
