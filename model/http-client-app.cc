@@ -25,6 +25,7 @@ void HttpClientApp::SetRemote(Address address, uint16_t port){ m_peer = address;
 void HttpClientApp::SetInterval(Time t){ m_interval = t; }
 void HttpClientApp::SetResource(const std::string& r){ m_resource = r; }
 void HttpClientApp::SetCsvPath(const std::string& p){ m_csvPath = p; }
+void HttpClientApp::SetSummaryCsvPath(const std::string& p){ m_summaryCsvPath = p; }
 void HttpClientApp::SetTotalRequests(uint32_t n){ m_total = n; }
 void HttpClientApp::SetNumContent(uint32_t n){ m_numContent = std::max(1u, n); }
 void HttpClientApp::SetZipf(bool z){ m_zipf = z; }
@@ -53,7 +54,11 @@ void HttpClientApp::StartApplication(){
   }
   ScheduleNext();
 }
-void HttpClientApp::StopApplication(){ if (m_socket) m_socket->Close(); if (m_csv.is_open()) m_csv.close(); }
+void HttpClientApp::StopApplication(){
+  if (m_socket) m_socket->Close();
+  if (m_csv.is_open()) m_csv.close();
+  WriteSummary();
+}
 
 void HttpClientApp::ScheduleNext(){
   if (m_sent >= m_total) return;
@@ -99,9 +104,53 @@ void HttpClientApp::HandleRead(Ptr<Socket> socket){
       NS_LOG_INFO("Client recv id=" << hdr.GetRequestId() << " hit=" << (hit?1:0));
       m_csv << hdr.GetRequestId() << "," << content << "," << s.GetSeconds() << "," << r.GetSeconds()
             << "," << lat_ms << "," << (hit?1:0) << "\n";
+
+      // Update per-content statistics
+      auto& stats = m_contentStats[content];
+      stats.totalRequests++;
+      if (hit) {
+        stats.cacheHits++;
+        stats.totalHitLatency += lat_ms;
+      } else {
+        stats.cacheMisses++;
+        stats.totalMissLatency += lat_ms;
+      }
+      stats.totalLatency += lat_ms;
+      stats.minLatency = std::min(stats.minLatency, lat_ms);
+      stats.maxLatency = std::max(stats.maxLatency, lat_ms);
+
       m_sendTimes.erase(it);
     }
   }
+}
+
+void HttpClientApp::WriteSummary(){
+  if (m_summaryCsvPath.empty()) return;
+
+  std::ofstream summary(m_summaryCsvPath, std::ios::out);
+  summary << "content,total_requests,cache_hits,cache_misses,hit_rate_percent,avg_latency_ms,min_latency_ms,max_latency_ms,avg_hit_latency_ms,avg_miss_latency_ms\n";
+
+  for (const auto& pair : m_contentStats){
+    const std::string& content = pair.first;
+    const ContentStats& stats = pair.second;
+
+    double hitRate = (stats.totalRequests > 0) ? (100.0 * stats.cacheHits / stats.totalRequests) : 0.0;
+    double avgLatency = (stats.totalRequests > 0) ? (stats.totalLatency / stats.totalRequests) : 0.0;
+    double avgHitLatency = (stats.cacheHits > 0) ? (stats.totalHitLatency / stats.cacheHits) : 0.0;
+    double avgMissLatency = (stats.cacheMisses > 0) ? (stats.totalMissLatency / stats.cacheMisses) : 0.0;
+
+    summary << content << ","
+            << stats.totalRequests << ","
+            << stats.cacheHits << ","
+            << stats.cacheMisses << ","
+            << hitRate << ","
+            << avgLatency << ","
+            << stats.minLatency << ","
+            << stats.maxLatency << ","
+            << avgHitLatency << ","
+            << avgMissLatency << "\n";
+  }
+  summary.close();
 }
 
 } // namespace ns3
