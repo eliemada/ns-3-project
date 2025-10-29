@@ -43,7 +43,7 @@ private:
   EventId m_event;
   Time m_interval{Seconds(1)};
   std::string m_resource{"/obj"};
-  std::unordered_map<uint32_t, Time> m_sendTimes;
+  std::unordered_map<uint32_t, std::pair<Time, std::string>> m_sendTimes;
   std::ofstream m_csv;
   std::string m_csvPath{"client_metrics.csv"};
   uint32_t m_nextId = 1;
