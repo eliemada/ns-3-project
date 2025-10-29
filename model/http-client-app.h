@@ -25,7 +25,7 @@ public:
   void SetTotalRequests(uint32_t n);
 
   // Randomization controls
-  void SetNumResources(uint32_t n);
+  void SetNumContent(uint32_t n);
   void SetZipf(bool z);
   void SetZipfS(double s);
 
@@ -51,7 +51,7 @@ private:
   uint32_t m_sent = 0;
 
   // randomization
-  uint32_t m_numResources = 1;
+  uint32_t m_numContent = 1;
   bool m_zipf = false;
   double m_zipfS = 1.0;
   Ptr<UniformRandomVariable> m_uni;

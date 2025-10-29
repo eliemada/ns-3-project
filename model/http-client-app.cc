@@ -26,7 +26,7 @@ void HttpClientApp::SetInterval(Time t){ m_interval = t; }
 void HttpClientApp::SetResource(const std::string& r){ m_resource = r; }
 void HttpClientApp::SetCsvPath(const std::string& p){ m_csvPath = p; }
 void HttpClientApp::SetTotalRequests(uint32_t n){ m_total = n; }
-void HttpClientApp::SetNumResources(uint32_t n){ m_numResources = std::max(1u, n); }
+void HttpClientApp::SetNumContent(uint32_t n){ m_numContent = std::max(1u, n); }
 void HttpClientApp::SetZipf(bool z){ m_zipf = z; }
 void HttpClientApp::SetZipfS(double s){ m_zipfS = s > 0 ? s : 1.0; }
 
@@ -41,12 +41,12 @@ void HttpClientApp::StartApplication(){
   m_csv << "request_id,send_s,recv_s,latency_ms,cache_hit\n";
 
   m_uni = CreateObject<UniformRandomVariable>();
-  if (m_numResources > 1 && m_zipf){
-    m_zipfCum.resize(m_numResources);
+  if (m_numContent > 1 && m_zipf){
+    m_zipfCum.resize(m_numContent);
     double sum = 0.0;
-    for (uint32_t k=1; k<=m_numResources; ++k) sum += 1.0 / std::pow((double)k, m_zipfS);
+    for (uint32_t k=1; k<=m_numContent; ++k) sum += 1.0 / std::pow((double)k, m_zipfS);
     double run = 0.0;
-    for (uint32_t k=1; k<=m_numResources; ++k){
+    for (uint32_t k=1; k<=m_numContent; ++k){
       run += (1.0 / std::pow((double)k, m_zipfS)) / sum;
       m_zipfCum[k-1] = run;
     }
@@ -61,13 +61,13 @@ void HttpClientApp::ScheduleNext(){
 }
 
 std::string HttpClientApp::PickResource(){
-  if (m_numResources <= 1) return m_resource;
+  if (m_numContent <= 1) return m_resource;
   uint32_t idx = 0;
   if (m_zipf && !m_zipfCum.empty()){
     double r = m_uni->GetValue(0.0, 1.0);
     for (uint32_t i=0;i<m_zipfCum.size();++i){ if (m_zipfCum[i] >= r){ idx = i; break; } }
   } else {
-    idx = (uint32_t) m_uni->GetInteger(0, (int64_t)m_numResources-1);
+    idx = (uint32_t) m_uni->GetInteger(0, (int64_t)m_numContent-1);
   }
   return std::string("/file-") + std::to_string(idx+1);
 }
