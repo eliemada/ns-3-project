@@ -18,6 +18,7 @@ public:
   void SetOrigin(Address a, uint16_t p);
   void SetTtl(Time t);
   void SetCapacity(uint32_t entries);
+  void SetCacheDelay(Time t);
 
 private:
   struct Entry { std::string value; Time expiry; std::list<std::string>::iterator it; };
@@ -34,6 +35,7 @@ private:
   Address m_originAddr; uint16_t m_originPort = 8081;
   uint16_t m_listenPort = 8080;
   Time m_ttl{Seconds(5)}; uint32_t m_capacity = 64;
+  Time m_cacheDelay{MilliSeconds(1)};
 
   // LRU structures
   std::list<std::string> m_lru;

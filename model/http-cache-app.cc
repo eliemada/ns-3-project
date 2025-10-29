@@ -21,6 +21,7 @@ void HttpCacheApp::SetListenPort(uint16_t p){ m_listenPort = p; }
 void HttpCacheApp::SetOrigin(Address a, uint16_t p){ m_originAddr = a; m_originPort = p; }
 void HttpCacheApp::SetTtl(Time t){ m_ttl = t; }
 void HttpCacheApp::SetCapacity(uint32_t c){ m_capacity = c; }
+void HttpCacheApp::SetCacheDelay(Time t){ m_cacheDelay = t; }
 
 void HttpCacheApp::StartApplication(){
   m_clientSock = Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
@@ -56,7 +57,7 @@ void HttpCacheApp::HandleClientRead(Ptr<Socket> sock){
     if (it != m_map.end() && it->second.expiry > now){
       NS_LOG_INFO("Cache HIT key=" << key);
       Touch(key);
-      ReplyToClient(hdr.GetRequestId(), key, true, from);
+      Simulator::Schedule(m_cacheDelay, &HttpCacheApp::ReplyToClient, this, hdr.GetRequestId(), key, true, from);
     } else {
       NS_LOG_INFO("Cache MISS key=" << key);
       // miss -> forward to origin
