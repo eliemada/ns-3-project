@@ -22,6 +22,7 @@ public:
   void SetInterval(Time t);
   void SetResource(const std::string& r);
   void SetCsvPath(const std::string& p);
+  void SetSummaryCsvPath(const std::string& p);
   void SetTotalRequests(uint32_t n);
 
   // Randomization controls
@@ -30,11 +31,23 @@ public:
   void SetZipfS(double s);
 
 private:
+  struct ContentStats {
+    uint32_t totalRequests = 0;
+    uint32_t cacheHits = 0;
+    uint32_t cacheMisses = 0;
+    double totalLatency = 0.0;
+    double totalHitLatency = 0.0;
+    double totalMissLatency = 0.0;
+    double minLatency = 1e9;
+    double maxLatency = 0.0;
+  };
+
   void StartApplication() override;
   void StopApplication() override;
   void ScheduleNext();
   void SendOne();
   void HandleRead(Ptr<Socket> socket);
+  void WriteSummary();
   std::string PickResource();
 
   Ptr<Socket> m_socket;
@@ -46,6 +59,8 @@ private:
   std::unordered_map<uint32_t, std::pair<Time, std::string>> m_sendTimes;
   std::ofstream m_csv;
   std::string m_csvPath{"client_metrics.csv"};
+  std::string m_summaryCsvPath{""};
+  std::unordered_map<std::string, ContentStats> m_contentStats;
   uint32_t m_nextId = 1;
   uint32_t m_total = 10;
   uint32_t m_sent = 0;

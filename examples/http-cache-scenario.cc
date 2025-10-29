@@ -12,7 +12,7 @@ using namespace ns3;
 int main(int argc, char** argv){
   Time::SetResolution(Time::NS);
   uint32_t nReq = 100; double interval=0.5; uint32_t cacheCap=4; double ttl=5.0;
-  std::string resource = "/file-A"; std::string csv = "client_metrics.csv";
+  std::string resource = "/file-A"; std::string csv = "client_metrics.csv"; std::string summaryCsv = "";
   uint32_t numContent = 1; bool zipf = false; double zipfS = 1.0; uint32_t originDelay = 1; uint32_t cacheDelay = 1;
   CommandLine cmd;
   cmd.AddValue("nReq", "Total client requests", nReq);
@@ -21,6 +21,7 @@ int main(int argc, char** argv){
   cmd.AddValue("ttl", "TTL seconds", ttl);
   cmd.AddValue("resource", "Resource path (default if numContent==1)", resource);
   cmd.AddValue("csv", "Output CSV path", csv);
+  cmd.AddValue("summaryCsv", "Summary statistics CSV path (optional)", summaryCsv);
   cmd.AddValue("numContent", "Number of distinct content items (1 = fixed resource)", numContent);
   cmd.AddValue("zipf", "Use Zipf popularity over resources", zipf);
   cmd.AddValue("zipfS", "Zipf exponent s (>0)", zipfS);
@@ -66,9 +67,10 @@ int main(int argc, char** argv){
   client->SetZipf(zipf);
   client->SetZipfS(zipfS);
   client->SetCsvPath(csv);
+  client->SetSummaryCsvPath(summaryCsv);
   client->SetTotalRequests(nReq);
   nodes.Get(0)->AddApplication(client);
-  client->SetStartTime(Seconds(0.3)); client->SetStopTime(Seconds(100));
+  client->SetStartTime(Seconds(0.3)); client->SetStopTime(Seconds(99.9));
 
   Simulator::Stop(Seconds(100));
   Simulator::Run();
