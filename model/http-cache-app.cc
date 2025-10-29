@@ -40,7 +40,7 @@ void HttpCacheApp::Touch(const std::string& key){
 void HttpCacheApp::Insert(const std::string& key, const std::string& val){
   auto now = Simulator::Now();
   if (m_map.size() >= m_capacity){ // evict LRU
-    const std::string& evictKey = m_lru.back(); m_lru.pop_back(); m_map.erase(evictKey);
+    std::string evictKey = m_lru.back(); m_lru.pop_back(); m_map.erase(evictKey);
   }
   m_lru.push_front(key);
   m_map[key] = Entry{val, now + m_ttl, m_lru.begin()};
