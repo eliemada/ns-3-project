@@ -13,15 +13,15 @@ int main(int argc, char** argv){
   Time::SetResolution(Time::NS);
   uint32_t nReq = 100; double interval=0.5; uint32_t cacheCap=4; double ttl=5.0;
   std::string resource = "/file-A"; std::string csv = "client_metrics.csv";
-  uint32_t numResources = 1; bool zipf = false; double zipfS = 1.0; uint32_t originDelay = 1;
+  uint32_t numContent = 1; bool zipf = false; double zipfS = 1.0; uint32_t originDelay = 1;
   CommandLine cmd;
   cmd.AddValue("nReq", "Total client requests", nReq);
   cmd.AddValue("interval", "Seconds between requests", interval);
   cmd.AddValue("cacheCap", "Cache capacity (entries)", cacheCap);
   cmd.AddValue("ttl", "TTL seconds", ttl);
-  cmd.AddValue("resource", "Resource path (default if numResources==1)", resource);
+  cmd.AddValue("resource", "Resource path (default if numContent==1)", resource);
   cmd.AddValue("csv", "Output CSV path", csv);
-  cmd.AddValue("numResources", "Number of distinct resources (1 = fixed resource)", numResources);
+  cmd.AddValue("numContent", "Number of distinct content items (1 = fixed resource)", numContent);
   cmd.AddValue("zipf", "Use Zipf popularity over resources", zipf);
   cmd.AddValue("zipfS", "Zipf exponent s (>0)", zipfS);
   cmd.AddValue("originDelay", "Origin processing delay (ms)", originDelay);
@@ -60,7 +60,7 @@ int main(int argc, char** argv){
   client->SetRemote(Address(if01.GetAddress(1)), clientToCachePort);
   client->SetInterval(Seconds(interval));
   client->SetResource(resource);
-  client->SetNumResources(numResources);
+  client->SetNumContent(numContent);
   client->SetZipf(zipf);
   client->SetZipfS(zipfS);
   client->SetCsvPath(csv);
