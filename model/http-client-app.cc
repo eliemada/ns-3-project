@@ -38,7 +38,7 @@ void HttpClientApp::StartApplication(){
     m_socket->SetRecvCallback(MakeCallback(&HttpClientApp::HandleRead, this));
   }
   m_csv.open(m_csvPath, std::ios::out);
-  m_csv << "request_id,send_s,recv_s,latency_ms,cache_hit\n";
+  m_csv << "request_id,content,send_s,recv_s,latency_ms,cache_hit\n";
 
   m_uni = CreateObject<UniformRandomVariable>();
   if (m_numContent > 1 && m_zipf){
@@ -78,7 +78,7 @@ void HttpClientApp::SendOne(){
   std::string res = PickResource();
   HttpHeader hdr(id, res);
   p->AddHeader(hdr);
-  m_sendTimes[id] = Simulator::Now();
+  m_sendTimes[id] = std::make_pair(Simulator::Now(), res);
   NS_LOG_INFO("Client sending id=" << id << " res=" << res);
   m_socket->Send(p);
   m_sent++;
@@ -91,11 +91,13 @@ void HttpClientApp::HandleRead(Ptr<Socket> socket){
     HttpHeader hdr; p->RemoveHeader(hdr);
     auto it = m_sendTimes.find(hdr.GetRequestId());
     if (it != m_sendTimes.end()){
-      Time s = it->second; Time r = Simulator::Now();
+      Time s = it->second.first;
+      std::string content = it->second.second;
+      Time r = Simulator::Now();
       double lat_ms = (r - s).GetMilliSeconds();
       bool hit = (!hdr.GetResource().empty() && hdr.GetResource().back()=='H');
       NS_LOG_INFO("Client recv id=" << hdr.GetRequestId() << " hit=" << (hit?1:0));
-      m_csv << hdr.GetRequestId() << "," << s.GetSeconds() << "," << r.GetSeconds()
+      m_csv << hdr.GetRequestId() << "," << content << "," << s.GetSeconds() << "," << r.GetSeconds()
             << "," << lat_ms << "," << (hit?1:0) << "\n";
       m_sendTimes.erase(it);
     }
