@@ -6,6 +6,8 @@
 #include "ns3/http-client-app.h"
 #include "ns3/http-cache-app.h"
 #include "ns3/http-origin-app.h"
+#include <sstream>
+#include <vector>
 
 using namespace ns3;
 
@@ -14,6 +16,7 @@ int main(int argc, char** argv){
   uint32_t nReq = 100; double interval=0.5; uint32_t cacheCap=4; double ttl=5.0;
   std::string resource = "/file-A"; std::string csv = "client_metrics.csv"; std::string summaryCsv = "";
   uint32_t numContent = 1; bool zipf = false; double zipfS = 1.0; uint32_t originDelay = 1; uint32_t cacheDelay = 1;
+  uint32_t numClients = 1;
   CommandLine cmd;
   cmd.AddValue("nReq", "Total client requests", nReq);
   cmd.AddValue("interval", "Seconds between requests", interval);
@@ -27,53 +30,126 @@ int main(int argc, char** argv){
   cmd.AddValue("zipfS", "Zipf exponent s (>0)", zipfS);
   cmd.AddValue("cacheDelay", "Cache processing delay for hits (ms)", cacheDelay);
   cmd.AddValue("originDelay", "Origin processing delay (ms)", originDelay);
+  cmd.AddValue("numClients", "Number of concurrent clients", numClients);
   cmd.Parse(argc, argv);
 
-  NodeContainer nodes; nodes.Create(3);
-  InternetStackHelper internet; internet.Install(nodes);
+  // Create nodes: numClients client nodes + 1 cache node + 1 origin node
+  NodeContainer clientNodes;
+  clientNodes.Create(numClients);
 
-  PointToPointHelper p2p1; p2p1.SetDeviceAttribute("DataRate", StringValue("100Mbps")); p2p1.SetChannelAttribute("Delay", StringValue("2ms"));
-  PointToPointHelper p2p2; p2p2.SetDeviceAttribute("DataRate", StringValue("50Mbps")); p2p2.SetChannelAttribute("Delay", StringValue("5ms"));
-  NetDeviceContainer d01 = p2p1.Install(nodes.Get(0), nodes.Get(1));
-  NetDeviceContainer d12 = p2p2.Install(nodes.Get(1), nodes.Get(2));
+  NodeContainer serverNodes;
+  serverNodes.Create(2);  // cache and origin
+
+  NodeContainer allNodes;
+  allNodes.Add(clientNodes);
+  allNodes.Add(serverNodes);
+
+  InternetStackHelper internet;
+  internet.Install(allNodes);
+
+  // Setup point-to-point links
+  PointToPointHelper p2pClientCache;
+  p2pClientCache.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
+  p2pClientCache.SetChannelAttribute("Delay", StringValue("2ms"));
+
+  PointToPointHelper p2pCacheOrigin;
+  p2pCacheOrigin.SetDeviceAttribute("DataRate", StringValue("50Mbps"));
+  p2pCacheOrigin.SetChannelAttribute("Delay", StringValue("5ms"));
+
+  // Create links from each client to cache
+  std::vector<NetDeviceContainer> clientCacheDevices(numClients);
+  std::vector<Ipv4InterfaceContainer> clientCacheInterfaces(numClients);
 
   Ipv4AddressHelper ip;
-  ip.SetBase("10.0.1.0", "255.255.255.0"); Ipv4InterfaceContainer if01 = ip.Assign(d01);
-  ip.SetBase("10.0.2.0", "255.255.255.0"); Ipv4InterfaceContainer if12 = ip.Assign(d12);
+  Ptr<Node> cacheNode = serverNodes.Get(0);
+  Ptr<Node> originNode = serverNodes.Get(1);
+
+  for (uint32_t i = 0; i < numClients; ++i) {
+    clientCacheDevices[i] = p2pClientCache.Install(clientNodes.Get(i), cacheNode);
+    std::ostringstream subnet;
+    subnet << "10." << (i / 256) << "." << (i % 256) << ".0";
+    ip.SetBase(subnet.str().c_str(), "255.255.255.0");
+    clientCacheInterfaces[i] = ip.Assign(clientCacheDevices[i]);
+  }
+
+  // Create link from cache to origin
+  NetDeviceContainer cacheOriginDevices = p2pCacheOrigin.Install(cacheNode, originNode);
+  ip.SetBase("192.168.1.0", "255.255.255.0");
+  Ipv4InterfaceContainer cacheOriginInterfaces = ip.Assign(cacheOriginDevices);
+
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
-  uint16_t clientToCachePort = 8080; uint16_t cacheToOriginPort = 8081;
+  uint16_t clientToCachePort = 8080;
+  uint16_t cacheToOriginPort = 8081;
 
+  // Setup origin server
   Ptr<HttpOriginApp> origin = CreateObject<HttpOriginApp>();
   origin->SetListenPort(cacheToOriginPort);
   origin->SetServiceDelay(MilliSeconds(originDelay));
-  nodes.Get(2)->AddApplication(origin);
-  origin->SetStartTime(Seconds(0.1)); origin->SetStopTime(Seconds(100));
+  originNode->AddApplication(origin);
+  origin->SetStartTime(Seconds(0.1));
+  origin->SetStopTime(Seconds(100));
 
+  // Setup cache server
   Ptr<HttpCacheApp> cache = CreateObject<HttpCacheApp>();
   cache->SetListenPort(clientToCachePort);
-  cache->SetOrigin(Address(if12.GetAddress(1)), cacheToOriginPort);
+  cache->SetOrigin(Address(cacheOriginInterfaces.GetAddress(1)), cacheToOriginPort);
   cache->SetTtl(Seconds(ttl));
   cache->SetCapacity(cacheCap);
   cache->SetCacheDelay(MilliSeconds(cacheDelay));
-  nodes.Get(1)->AddApplication(cache);
-  cache->SetStartTime(Seconds(0.2)); cache->SetStopTime(Seconds(100));
+  cacheNode->AddApplication(cache);
+  cache->SetStartTime(Seconds(0.2));
+  cache->SetStopTime(Seconds(100));
 
-  Ptr<HttpClientApp> client = CreateObject<HttpClientApp>();
-  client->SetRemote(Address(if01.GetAddress(1)), clientToCachePort);
-  client->SetInterval(Seconds(interval));
-  client->SetResource(resource);
-  client->SetNumContent(numContent);
-  client->SetZipf(zipf);
-  client->SetZipfS(zipfS);
-  client->SetCsvPath(csv);
-  client->SetSummaryCsvPath(summaryCsv);
-  client->SetTotalRequests(nReq);
-  nodes.Get(0)->AddApplication(client);
-  client->SetStartTime(Seconds(0.3)); client->SetStopTime(Seconds(99.9));
+  // Setup client applications
+  for (uint32_t i = 0; i < numClients; ++i) {
+    Ptr<HttpClientApp> client = CreateObject<HttpClientApp>();
+    client->SetRemote(Address(clientCacheInterfaces[i].GetAddress(1)), clientToCachePort);
+    client->SetInterval(Seconds(interval));
+    client->SetResource(resource);
+    client->SetNumContent(numContent);
+    client->SetZipf(zipf);
+    client->SetZipfS(zipfS);
+    client->SetTotalRequests(nReq);
+
+    // Set CSV paths with client index if multiple clients
+    if (!csv.empty()) {
+      if (numClients > 1) {
+        size_t dotPos = csv.find_last_of('.');
+        std::string baseName = (dotPos != std::string::npos) ? csv.substr(0, dotPos) : csv;
+        std::string extension = (dotPos != std::string::npos) ? csv.substr(dotPos) : "";
+        std::ostringstream csvPath;
+        csvPath << baseName << "_client_" << i << extension;
+        client->SetCsvPath(csvPath.str());
+      } else {
+        client->SetCsvPath(csv);
+      }
+    }
+
+    // Set summary CSV paths with client index if multiple clients
+    if (!summaryCsv.empty()) {
+      if (numClients > 1) {
+        size_t dotPos = summaryCsv.find_last_of('.');
+        std::string baseName = (dotPos != std::string::npos) ? summaryCsv.substr(0, dotPos) : summaryCsv;
+        std::string extension = (dotPos != std::string::npos) ? summaryCsv.substr(dotPos) : "";
+        std::ostringstream summaryPath;
+        summaryPath << baseName << "_client_" << i << extension;
+        client->SetSummaryCsvPath(summaryPath.str());
+      } else {
+        client->SetSummaryCsvPath(summaryCsv);
+      }
+    }
+
+    clientNodes.Get(i)->AddApplication(client);
+    client->SetStartTime(Seconds(0.3));
+    client->SetStopTime(Seconds(99.9));
+  }
+
+  std::cout << "Starting simulation with " << numClients << " client(s)..." << std::endl;
 
   Simulator::Stop(Seconds(100));
   Simulator::Run();
+  std::cout << "Simulation completed successfully!" << std::endl;
   Simulator::Destroy();
   return 0;
 }
