@@ -15,6 +15,7 @@ int main(int argc, char** argv){
   Time::SetResolution(Time::NS);
   uint32_t nReq = 100; double interval=0.5; uint32_t cacheCap=4; double ttl=5.0;
   std::string resource = "/file-A"; std::string csv = "client_metrics.csv"; std::string summaryCsv = "";
+  std::string globalSummaryCsv = "";
   uint32_t numContent = 1; bool zipf = false; double zipfS = 1.0; uint32_t originDelay = 1; uint32_t cacheDelay = 1;
   uint32_t numClients = 1;
   CommandLine cmd;
@@ -25,6 +26,7 @@ int main(int argc, char** argv){
   cmd.AddValue("resource", "Resource path (default if numContent==1)", resource);
   cmd.AddValue("csv", "Output CSV path", csv);
   cmd.AddValue("summaryCsv", "Summary statistics CSV path (optional)", summaryCsv);
+  cmd.AddValue("globalSummaryCsv", "Global aggregated summary CSV path (optional)", globalSummaryCsv);
   cmd.AddValue("numContent", "Number of distinct content items (1 = fixed resource)", numContent);
   cmd.AddValue("zipf", "Use Zipf popularity over resources", zipf);
   cmd.AddValue("zipfS", "Zipf exponent s (>0)", zipfS);
@@ -102,6 +104,7 @@ int main(int argc, char** argv){
   cache->SetStopTime(Seconds(100));
 
   // Setup client applications
+  std::vector<Ptr<HttpClientApp>> clientApps;  // Store for global summary
   for (uint32_t i = 0; i < numClients; ++i) {
     Ptr<HttpClientApp> client = CreateObject<HttpClientApp>();
     client->SetRemote(Address(clientCacheInterfaces[i].GetAddress(1)), clientToCachePort);
@@ -143,6 +146,8 @@ int main(int argc, char** argv){
     clientNodes.Get(i)->AddApplication(client);
     client->SetStartTime(Seconds(0.3));
     client->SetStopTime(Seconds(99.9));
+
+    clientApps.push_back(client);  // Store for global summary
   }
 
   std::cout << "Starting simulation with " << numClients << " client(s)..." << std::endl;
@@ -150,6 +155,61 @@ int main(int argc, char** argv){
   Simulator::Stop(Seconds(100));
   Simulator::Run();
   std::cout << "Simulation completed successfully!" << std::endl;
+
+  // Write global summary CSV if requested
+  if (!globalSummaryCsv.empty()) {
+    std::cout << "Writing global summary CSV..." << std::endl;
+
+    // Aggregate statistics from all clients
+    std::unordered_map<std::string, HttpClientApp::ContentStats> globalStats;
+
+    for (const auto& client : clientApps) {
+      const auto& clientStats = client->GetContentStats();
+      for (const auto& pair : clientStats) {
+        const std::string& content = pair.first;
+        const HttpClientApp::ContentStats& stats = pair.second;
+
+        auto& global = globalStats[content];
+        global.totalRequests += stats.totalRequests;
+        global.cacheHits += stats.cacheHits;
+        global.cacheMisses += stats.cacheMisses;
+        global.totalLatency += stats.totalLatency;
+        global.totalHitLatency += stats.totalHitLatency;
+        global.totalMissLatency += stats.totalMissLatency;
+        global.minLatency = std::min(global.minLatency, stats.minLatency);
+        global.maxLatency = std::max(global.maxLatency, stats.maxLatency);
+      }
+    }
+
+    // Write global summary CSV
+    std::ofstream globalSummary(globalSummaryCsv, std::ios::out);
+    globalSummary << "content,total_requests,cache_hits,cache_misses,hit_rate_percent,avg_latency_ms,min_latency_ms,max_latency_ms,avg_hit_latency_ms,avg_miss_latency_ms\n";
+
+    for (const auto& pair : globalStats) {
+      const std::string& content = pair.first;
+      const HttpClientApp::ContentStats& stats = pair.second;
+
+      double hitRate = (stats.totalRequests > 0) ? (100.0 * stats.cacheHits / stats.totalRequests) : 0.0;
+      double avgLatency = (stats.totalRequests > 0) ? (stats.totalLatency / stats.totalRequests) : 0.0;
+      double avgHitLatency = (stats.cacheHits > 0) ? (stats.totalHitLatency / stats.cacheHits) : 0.0;
+      double avgMissLatency = (stats.cacheMisses > 0) ? (stats.totalMissLatency / stats.cacheMisses) : 0.0;
+
+      globalSummary << content << ","
+                    << stats.totalRequests << ","
+                    << stats.cacheHits << ","
+                    << stats.cacheMisses << ","
+                    << hitRate << ","
+                    << avgLatency << ","
+                    << stats.minLatency << ","
+                    << stats.maxLatency << ","
+                    << avgHitLatency << ","
+                    << avgMissLatency << "\n";
+    }
+
+    globalSummary.close();
+    std::cout << "Global summary written to: " << globalSummaryCsv << std::endl;
+  }
+
   Simulator::Destroy();
   return 0;
 }

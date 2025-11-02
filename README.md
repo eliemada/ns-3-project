@@ -76,23 +76,29 @@ Test cache hit rates with different parameters:
 Simulate multiple concurrent clients (50k+ users):
 
 ```bash
-# 1,000 concurrent clients
-./ns3 run "http-cache-scenario --numClients=1000 --nReq=100 --numContent=10 --cacheCap=5 --zipf=true --csv=metrics_1k.csv"
+# 1,000 concurrent clients with global summary
+./ns3 run "http-cache-scenario --numClients=1000 --nReq=100 --numContent=10 --cacheCap=5 --zipf=true --globalSummaryCsv=global_summary.csv"
 
-# 10,000 concurrent clients
+# 10,000 concurrent clients (per-client CSVs)
 ./ns3 run "http-cache-scenario --numClients=10000 --nReq=50 --numContent=20 --cacheCap=10 --zipf=true --csv=metrics_10k.csv"
 
-# 50,000 concurrent clients (stress test)
-./ns3 run "http-cache-scenario --numClients=50000 --nReq=10 --numContent=20 --cacheCap=10 --zipf=true --zipfS=1.2"
+# 50,000 concurrent clients (fastest - global summary only)
+./ns3 run "http-cache-scenario --numClients=50000 --nReq=10 --numContent=20 --cacheCap=10 --zipf=true --zipfS=1.2 --globalSummaryCsv=global_50k.csv"
 
-# 100,000 concurrent clients (extreme scale)
+# 100,000 concurrent clients (extreme scale - no CSV for speed)
 ./ns3 run "http-cache-scenario --numClients=100000 --nReq=5 --numContent=15 --cacheCap=8 --zipf=true"
 ```
 
+**CSV Output Options:**
+- `--csv=file.csv` - Per-request metrics for each client (creates N files for N clients)
+- `--summaryCsv=file.csv` - Per-content summary for each client (creates N files for N clients)
+- `--globalSummaryCsv=file.csv` - **Single aggregated summary across all clients** (recommended for large-scale)
+- Omit all CSV flags for maximum performance
+
 **Note:** For large-scale simulations:
-- Each client generates separate CSV files named `<base>_client_<id>.csv`
+- Use `--globalSummaryCsv` for ONE aggregated summary file (fastest with metrics)
+- `--csv` creates separate files per client: `<base>_client_<id>.csv`
 - Reduce `--nReq` for very large client counts to keep simulation time reasonable
-- CSV output is optional; omit `--csv` for faster execution
 - Memory usage scales with client count; monitor system resources
 
 ## Configuration Parameters
@@ -110,7 +116,8 @@ Simulate multiple concurrent clients (50k+ users):
 | `--originDelay` | uint32_t | 10 | Origin server response delay (milliseconds) |
 | `--cacheDelay` | uint32_t | 1 | Cache processing delay for hits (milliseconds) |
 | `--csv` | string | "" | Per-request metrics CSV output path (optional) |
-| `--summaryCsv` | string | "" | Summary statistics CSV output path (optional) |
+| `--summaryCsv` | string | "" | Per-client summary CSV path (optional) |
+| `--globalSummaryCsv` | string | "" | Global aggregated summary CSV path (optional) |
 
 ## Output Formats
 
