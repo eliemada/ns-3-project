@@ -41,6 +41,12 @@ public:
   void SetZipf(bool z);
   void SetZipfS(double s);
 
+  /**
+   * \brief Set the size of objects to request
+   * \param size Object size in bytes
+   */
+  void SetObjectSize(uint32_t size);
+
   // Get statistics for global aggregation
   const std::unordered_map<std::string, ContentStats>& GetContentStats() const;
 
@@ -75,6 +81,7 @@ private:
   double m_zipfS = 1.0;
   Ptr<UniformRandomVariable> m_uni;
   std::vector<double> m_zipfCum;
+  uint32_t m_objectSize = 1024;  ///< Object size in bytes
 };
 
 } // namespace ns3

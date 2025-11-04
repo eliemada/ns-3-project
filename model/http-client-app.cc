@@ -31,6 +31,10 @@ void HttpClientApp::SetNumContent(uint32_t n){ m_numContent = std::max(1u, n); }
 void HttpClientApp::SetZipf(bool z){ m_zipf = z; }
 void HttpClientApp::SetZipfS(double s){ m_zipfS = s > 0 ? s : 1.0; }
 
+void HttpClientApp::SetObjectSize(uint32_t size) {
+  m_objectSize = size;
+}
+
 void HttpClientApp::StartApplication(){
   if (!m_socket){
     m_socket = Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
@@ -79,7 +83,7 @@ std::string HttpClientApp::PickResource(){
 
 void HttpClientApp::SendOne(){
   uint32_t id = m_nextId++;
-  Ptr<Packet> p = Create<Packet>(0);
+  Ptr<Packet> p = Create<Packet>(m_objectSize);
   std::string res = PickResource();
   HttpHeader hdr(id, res);
   p->AddHeader(hdr);
