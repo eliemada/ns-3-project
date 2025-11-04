@@ -79,8 +79,8 @@ Simulate multiple concurrent clients (50k+ users):
 # 1,000 concurrent clients with global summary
 ./ns3 run "http-cache-scenario --numClients=1000 --nReq=100 --numContent=10 --cacheCap=5 --zipf=true --globalSummaryCsv=global_summary.csv"
 
-# 10,000 concurrent clients (per-client CSVs)
-./ns3 run "http-cache-scenario --numClients=10000 --nReq=50 --numContent=20 --cacheCap=10 --zipf=true --csv=metrics_10k.csv"
+# 10,000 concurrent clients (global summary recommended)
+./ns3 run "http-cache-scenario --numClients=10000 --nReq=50 --numContent=20 --cacheCap=10 --zipf=true --globalSummaryCsv=global_10k.csv"
 
 # 50,000 concurrent clients (fastest - global summary only)
 ./ns3 run "http-cache-scenario --numClients=50000 --nReq=10 --numContent=20 --cacheCap=10 --zipf=true --zipfS=1.2 --globalSummaryCsv=global_50k.csv"
@@ -95,9 +95,11 @@ Simulate multiple concurrent clients (50k+ users):
 - `--globalSummaryCsv=file.csv` - **Single aggregated summary across all clients** (recommended for large-scale)
 - Omit all CSV flags for maximum performance
 
-**Note:** For large-scale simulations:
-- Use `--globalSummaryCsv` for ONE aggregated summary file (fastest with metrics)
+**⚠️ WARNING - Large-Scale Simulations:**
+- **DO NOT use `--csv` or `--summaryCsv` with many clients** - they create 1 CSV file per client which becomes impractical and useless (e.g., 50k clients = 50k files!)
+- **ALWAYS use `--globalSummaryCsv`** for large-scale testing - creates ONE aggregated summary file across all clients
 - `--csv` creates separate files per client: `<base>_client_<id>.csv`
+- `--summaryCsv` creates separate summary files per client: `<base>_client_<id>.csv`
 - Reduce `--nReq` for very large client counts to keep simulation time reasonable
 - Memory usage scales with client count; monitor system resources
 
