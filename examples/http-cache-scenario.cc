@@ -18,6 +18,7 @@ int main(int argc, char** argv){
   std::string globalSummaryCsv = "";
   uint32_t numContent = 1; bool zipf = false; double zipfS = 1.0; uint32_t originDelay = 1; uint32_t cacheDelay = 1;
   uint32_t numClients = 1;
+  uint32_t objectSize = 1024;  // Default 1 KB
   CommandLine cmd;
   cmd.AddValue("nReq", "Total client requests", nReq);
   cmd.AddValue("interval", "Seconds between requests", interval);
@@ -33,6 +34,7 @@ int main(int argc, char** argv){
   cmd.AddValue("cacheDelay", "Cache processing delay for hits (ms)", cacheDelay);
   cmd.AddValue("originDelay", "Origin processing delay (ms)", originDelay);
   cmd.AddValue("numClients", "Number of concurrent clients", numClients);
+  cmd.AddValue("objectSize", "Object size in bytes (default 1024)", objectSize);
   cmd.Parse(argc, argv);
 
   // Create nodes: numClients client nodes + 1 cache node + 1 origin node
@@ -88,6 +90,7 @@ int main(int argc, char** argv){
   Ptr<HttpOriginApp> origin = CreateObject<HttpOriginApp>();
   origin->SetListenPort(cacheToOriginPort);
   origin->SetServiceDelay(MilliSeconds(originDelay));
+  origin->SetObjectSize(objectSize);
   originNode->AddApplication(origin);
   origin->SetStartTime(Seconds(0.1));
   origin->SetStopTime(Seconds(100));
@@ -99,6 +102,7 @@ int main(int argc, char** argv){
   cache->SetTtl(Seconds(ttl));
   cache->SetCapacity(cacheCap);
   cache->SetCacheDelay(MilliSeconds(cacheDelay));
+  cache->SetObjectSize(objectSize);
   cacheNode->AddApplication(cache);
   cache->SetStartTime(Seconds(0.2));
   cache->SetStopTime(Seconds(100));
@@ -114,6 +118,7 @@ int main(int argc, char** argv){
     client->SetZipf(zipf);
     client->SetZipfS(zipfS);
     client->SetTotalRequests(nReq);
+    client->SetObjectSize(objectSize);
 
     // Set CSV paths with client index if multiple clients
     if (!csv.empty()) {
