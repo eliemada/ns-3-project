@@ -56,20 +56,22 @@ Run the simulation with default parameters:
 Run with 100 requests, 10 content items, Zipf distribution, and output metrics:
 
 ```bash
-./ns3 run http-cache-scenario -- --nReq=100 --interval=0.2 --ttl=3 --cacheCap=5 --numContent=10 --zipf=true --zipfS=1.0 --originDelay=5 --cacheDelay=1 --csv=metrics.csv --summaryCsv=summary.csv
+./ns3 run http-cache-scenario -- --nReq=100 --interval=0.2 --ttl=3 --cacheCapacityGB=0.5 --numContent=10 --zipf=true --zipfS=1.0 --originDelay=5 --cacheDelay=1 --csv=metrics.csv --summaryCsv=summary.csv
 ```
 
-### Object Size Examples
+### Object Size and Cache Capacity Examples
+
+The cache capacity is now specified in gigabytes (GB), with the maximum number of cached objects calculated as: `capacity_bytes / objectSize`
 
 ```bash
-# Small objects (images, API responses) - 1 KB
-./ns3 run http-cache-scenario -- --objectSize=1024
+# Small objects (images, API responses) - 1 KB with 500 MB cache = ~500,000 objects
+./ns3 run http-cache-scenario -- --objectSize=1024 --cacheCapacityGB=0.5
 
-# Medium objects (web pages) - 10 KB
-./ns3 run http-cache-scenario -- --objectSize=10240
+# Medium objects (web pages) - 10 KB with 1 GB cache = ~100,000 objects
+./ns3 run http-cache-scenario -- --objectSize=10240 --cacheCapacityGB=1.0
 
-# Large objects (media files) - 64 KB
-./ns3 run http-cache-scenario -- --objectSize=65536
+# Large objects (media files) - 10 MB with 10 GB cache = ~1,000 objects
+./ns3 run http-cache-scenario -- --objectSize=10485760 --cacheCapacityGB=10
 ```
 
 **⚠️ UDP Packet Size Limitation:** The current implementation uses UDP sockets, which have a maximum payload size of ~65,507 bytes (65,535 bytes minus IP and UDP headers). Object sizes exceeding this limit will cause packets to be silently dropped. For objects larger than 64 KB, consider implementing packet fragmentation or switching to TCP sockets.
@@ -79,11 +81,11 @@ Run with 100 requests, 10 content items, Zipf distribution, and output metrics:
 Test cache hit rates with different parameters:
 
 ```bash
-# Small cache with many content items (low hit rate)
-./ns3 run http-cache-scenario -- --nReq=200 --cacheCap=5 --numContent=20 --zipf=true --zipfS=1.2
+# Small cache (100 MB) with many content items (low hit rate)
+./ns3 run http-cache-scenario -- --nReq=200 --cacheCapacityGB=0.1 --numContent=20 --zipf=true --zipfS=1.2
 
-# Large cache with fewer items (high hit rate)
-./ns3 run http-cache-scenario -- --nReq=200 --cacheCap=50 --numContent=10 --zipf=true --zipfS=0.8
+# Large cache (5 GB) with fewer items (high hit rate)
+./ns3 run http-cache-scenario -- --nReq=200 --cacheCapacityGB=5.0 --numContent=10 --zipf=true --zipfS=0.8
 ```
 
 ### Transfer Time and Object Size
@@ -100,17 +102,17 @@ Larger objects result in higher latency, especially on cache misses.
 Simulate multiple concurrent clients (50k+ users):
 
 ```bash
-# 1,000 concurrent clients with global summary
-./ns3 run "http-cache-scenario --numClients=1000 --nReq=100 --numContent=10 --cacheCap=5 --zipf=true --globalSummaryCsv=global_summary.csv"
+# 1,000 concurrent clients with global summary (1 GB cache)
+./ns3 run "http-cache-scenario --numClients=1000 --nReq=100 --numContent=10 --cacheCapacityGB=1.0 --zipf=true --globalSummaryCsv=global_summary.csv"
 
-# 10,000 concurrent clients (global summary recommended)
-./ns3 run "http-cache-scenario --numClients=10000 --nReq=50 --numContent=20 --cacheCap=10 --zipf=true --globalSummaryCsv=global_10k.csv"
+# 10,000 concurrent clients (global summary recommended, 5 GB cache)
+./ns3 run "http-cache-scenario --numClients=10000 --nReq=50 --numContent=20 --cacheCapacityGB=5.0 --zipf=true --globalSummaryCsv=global_10k.csv"
 
-# 50,000 concurrent clients (fastest - global summary only)
-./ns3 run "http-cache-scenario --numClients=50000 --nReq=10 --numContent=20 --cacheCap=10 --zipf=true --zipfS=1.2 --globalSummaryCsv=global_50k.csv"
+# 50,000 concurrent clients (fastest - global summary only, 10 GB cache)
+./ns3 run "http-cache-scenario --numClients=50000 --nReq=10 --numContent=20 --cacheCapacityGB=10 --zipf=true --zipfS=1.2 --globalSummaryCsv=global_50k.csv"
 
-# 100,000 concurrent clients (extreme scale - no CSV for speed)
-./ns3 run "http-cache-scenario --numClients=100000 --nReq=5 --numContent=15 --cacheCap=8 --zipf=true"
+# 100,000 concurrent clients (extreme scale - no CSV for speed, 20 GB cache)
+./ns3 run "http-cache-scenario --numClients=100000 --nReq=5 --numContent=15 --cacheCapacityGB=20 --zipf=true"
 ```
 
 **CSV Output Options:**
@@ -134,7 +136,7 @@ Simulate multiple concurrent clients (50k+ users):
 | `--nReq` | uint32_t | 10 | Number of HTTP requests per client |
 | `--interval` | double | 0.5 | Time interval between requests (seconds) |
 | `--ttl` | uint32_t | 10 | Cache TTL for content (seconds) |
-| `--cacheCap` | uint32_t | 3 | Maximum number of items in cache |
+| `--cacheCapacityGB` | double | 1.0 | Cache capacity in gigabytes (max objects = capacity_bytes / objectSize) |
 | `--numClients` | uint32_t | 1 | Number of concurrent clients (supports 50k+) |
 | `--numContent` | uint32_t | 1 | Number of distinct content items (1 = fixed resource) |
 | `--zipf` | bool | false | Use Zipf distribution for content popularity |

@@ -63,10 +63,10 @@ Lower `--nReq` for stress tests focused on scalability:
 
 ```bash
 # Scalability test (fewer requests per client)
-./ns3 run "http-cache-scenario --numClients=50000 --nReq=5 --numContent=15 --cacheCap=10"
+./ns3 run "http-cache-scenario --numClients=50000 --nReq=5 --numContent=15 --cacheCapacityGB=5.0"
 
 # Throughput test (more requests per client)
-./ns3 run "http-cache-scenario --numClients=1000 --nReq=100 --numContent=20 --cacheCap=10"
+./ns3 run "http-cache-scenario --numClients=1000 --nReq=100 --numContent=20 --cacheCapacityGB=2.0"
 ```
 
 ### 3. Adjust Intervals
