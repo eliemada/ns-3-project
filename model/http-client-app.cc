@@ -153,4 +153,8 @@ void HttpClientApp::WriteSummary(){
   summary.close();
 }
 
+const std::unordered_map<std::string, HttpClientApp::ContentStats>& HttpClientApp::GetContentStats() const {
+  return m_contentStats;
+}
+
 } // namespace ns3

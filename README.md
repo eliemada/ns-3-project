@@ -7,6 +7,7 @@ A network simulator module for ns-3 that models HTTP caching behavior with confi
 - **LRU Cache Eviction** - Least Recently Used eviction policy for cache management
 - **Configurable TTL** - Time-to-live expiration for cached content
 - **Zipf Distribution** - Realistic content popularity modeling with power-law distribution
+- **Large-Scale Simulations** - Support for 50,000+ concurrent clients for scalability testing
 - **Per-Request Metrics** - Detailed CSV with request ID, content, latency, and cache hit/miss
 - **Summary Statistics** - Per-content aggregate metrics including hit rates and latency percentiles
 - **Flexible Configuration** - Command-line parameters for cache capacity, delays, content count, and more
@@ -70,21 +71,55 @@ Test cache hit rates with different parameters:
 ./ns3 run http-cache-scenario -- --nReq=200 --cacheCap=50 --numContent=10 --zipf=true --zipfS=0.8
 ```
 
+### Large-Scale Simulations
+
+Simulate multiple concurrent clients (50k+ users):
+
+```bash
+# 1,000 concurrent clients with global summary
+./ns3 run "http-cache-scenario --numClients=1000 --nReq=100 --numContent=10 --cacheCap=5 --zipf=true --globalSummaryCsv=global_summary.csv"
+
+# 10,000 concurrent clients (global summary recommended)
+./ns3 run "http-cache-scenario --numClients=10000 --nReq=50 --numContent=20 --cacheCap=10 --zipf=true --globalSummaryCsv=global_10k.csv"
+
+# 50,000 concurrent clients (fastest - global summary only)
+./ns3 run "http-cache-scenario --numClients=50000 --nReq=10 --numContent=20 --cacheCap=10 --zipf=true --zipfS=1.2 --globalSummaryCsv=global_50k.csv"
+
+# 100,000 concurrent clients (extreme scale - no CSV for speed)
+./ns3 run "http-cache-scenario --numClients=100000 --nReq=5 --numContent=15 --cacheCap=8 --zipf=true"
+```
+
+**CSV Output Options:**
+- `--csv=file.csv` - Per-request metrics for each client (creates N files for N clients)
+- `--summaryCsv=file.csv` - Per-content summary for each client (creates N files for N clients)
+- `--globalSummaryCsv=file.csv` - **Single aggregated summary across all clients** (recommended for large-scale)
+- Omit all CSV flags for maximum performance
+
+**⚠️ WARNING - Large-Scale Simulations:**
+- **DO NOT use `--csv` or `--summaryCsv` with many clients** - they create 1 CSV file per client which becomes impractical and useless (e.g., 50k clients = 50k files!)
+- **ALWAYS use `--globalSummaryCsv`** for large-scale testing - creates ONE aggregated summary file across all clients
+- `--csv` creates separate files per client: `<base>_client_<id>.csv`
+- `--summaryCsv` creates separate summary files per client: `<base>_client_<id>.csv`
+- Reduce `--nReq` for very large client counts to keep simulation time reasonable
+- Memory usage scales with client count; monitor system resources
+
 ## Configuration Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `--nReq` | uint32_t | 10 | Number of HTTP requests to generate |
+| `--nReq` | uint32_t | 10 | Number of HTTP requests per client |
 | `--interval` | double | 0.5 | Time interval between requests (seconds) |
 | `--ttl` | uint32_t | 10 | Cache TTL for content (seconds) |
 | `--cacheCap` | uint32_t | 3 | Maximum number of items in cache |
+| `--numClients` | uint32_t | 1 | Number of concurrent clients (supports 50k+) |
 | `--numContent` | uint32_t | 1 | Number of distinct content items (1 = fixed resource) |
 | `--zipf` | bool | false | Use Zipf distribution for content popularity |
 | `--zipfS` | double | 1.0 | Zipf skew parameter (higher = more skewed) |
 | `--originDelay` | uint32_t | 10 | Origin server response delay (milliseconds) |
 | `--cacheDelay` | uint32_t | 1 | Cache processing delay for hits (milliseconds) |
 | `--csv` | string | "" | Per-request metrics CSV output path (optional) |
-| `--summaryCsv` | string | "" | Summary statistics CSV output path (optional) |
+| `--summaryCsv` | string | "" | Per-client summary CSV path (optional) |
+| `--globalSummaryCsv` | string | "" | Global aggregated summary CSV path (optional) |
 
 ## Output Formats
 

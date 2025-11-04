@@ -18,6 +18,17 @@ public:
   HttpClientApp();
   ~HttpClientApp() override;
 
+  struct ContentStats {
+    uint32_t totalRequests = 0;
+    uint32_t cacheHits = 0;
+    uint32_t cacheMisses = 0;
+    double totalLatency = 0.0;
+    double totalHitLatency = 0.0;
+    double totalMissLatency = 0.0;
+    double minLatency = 1e9;
+    double maxLatency = 0.0;
+  };
+
   void SetRemote(Address address, uint16_t port);
   void SetInterval(Time t);
   void SetResource(const std::string& r);
@@ -30,17 +41,10 @@ public:
   void SetZipf(bool z);
   void SetZipfS(double s);
 
+  // Get statistics for global aggregation
+  const std::unordered_map<std::string, ContentStats>& GetContentStats() const;
+
 private:
-  struct ContentStats {
-    uint32_t totalRequests = 0;
-    uint32_t cacheHits = 0;
-    uint32_t cacheMisses = 0;
-    double totalLatency = 0.0;
-    double totalHitLatency = 0.0;
-    double totalMissLatency = 0.0;
-    double minLatency = 1e9;
-    double maxLatency = 0.0;
-  };
 
   void StartApplication() override;
   void StopApplication() override;
