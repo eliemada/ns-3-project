@@ -19,6 +19,11 @@ public:
   void SetTtl(Time t);
   void SetCapacity(uint32_t entries);
   void SetCacheDelay(Time t);
+  /**
+   * \brief Set the size of objects being cached
+   * \param size Object size in bytes
+   */
+  void SetObjectSize(uint32_t size);
 
 private:
   struct Entry { std::string value; Time expiry; std::list<std::string>::iterator it; };
@@ -36,6 +41,7 @@ private:
   uint16_t m_listenPort = 8080;
   Time m_ttl{Seconds(5)}; uint32_t m_capacity = 64;
   Time m_cacheDelay{MilliSeconds(1)};
+  uint32_t m_objectSize = 1024;  ///< Object size in bytes
 
   // LRU structures
   std::list<std::string> m_lru;

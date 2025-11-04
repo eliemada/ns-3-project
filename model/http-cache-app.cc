@@ -22,6 +22,9 @@ void HttpCacheApp::SetOrigin(Address a, uint16_t p){ m_originAddr = a; m_originP
 void HttpCacheApp::SetTtl(Time t){ m_ttl = t; }
 void HttpCacheApp::SetCapacity(uint32_t c){ m_capacity = c; }
 void HttpCacheApp::SetCacheDelay(Time t){ m_cacheDelay = t; }
+void HttpCacheApp::SetObjectSize(uint32_t size) {
+  m_objectSize = size;
+}
 
 void HttpCacheApp::StartApplication(){
   m_clientSock = Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
@@ -62,7 +65,7 @@ void HttpCacheApp::HandleClientRead(Ptr<Socket> sock){
       NS_LOG_INFO("Cache MISS key=" << key);
       // miss -> forward to origin
       m_waiting[hdr.GetRequestId()] = from;
-      Ptr<Packet> fwd = Create<Packet>(0);
+      Ptr<Packet> fwd = Create<Packet>(m_objectSize);
       fwd->AddHeader(hdr);
       m_originSock->Send(fwd);
     }
@@ -87,7 +90,7 @@ void HttpCacheApp::HandleOriginRead(Ptr<Socket> sock){
 void HttpCacheApp::ReplyToClient(uint32_t reqId, const std::string& resource, bool hit, const Address& to){
   // Encode hit/miss by suffixing resource with 'H' or 'M'
   std::string res = resource + (hit?"H":"M");
-  Ptr<Packet> resp = Create<Packet>(0);
+  Ptr<Packet> resp = Create<Packet>(m_objectSize);
   HttpHeader hdr(reqId, res);
   resp->AddHeader(hdr);
   m_clientSock->SendTo(resp, 0, to);
