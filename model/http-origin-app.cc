@@ -16,6 +16,9 @@ TypeId HttpOriginApp::GetTypeId(){
 HttpOriginApp::HttpOriginApp() = default;
 void HttpOriginApp::SetListenPort(uint16_t p){ m_port = p; }
 void HttpOriginApp::SetServiceDelay(Time t){ m_delay = t; }
+void HttpOriginApp::SetObjectSize(uint32_t size) {
+  m_objectSize = size;
+}
 
 void HttpOriginApp::StartApplication(){
   m_sock = Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
@@ -33,7 +36,7 @@ void HttpOriginApp::HandleRead(Ptr<Socket> sock){
 }
 
 void HttpOriginApp::Respond(uint32_t reqId, const Address& to, const std::string& resource){
-  Ptr<Packet> resp = Create<Packet>(0);
+  Ptr<Packet> resp = Create<Packet>(m_objectSize);
   HttpHeader hdr(reqId, resource);
   resp->AddHeader(hdr);
   m_sock->SendTo(resp, 0, to);

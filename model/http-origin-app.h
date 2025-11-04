@@ -11,6 +11,11 @@ public:
   HttpOriginApp();
   void SetListenPort(uint16_t p);
   void SetServiceDelay(Time t);
+  /**
+   * \brief Set the size of objects to serve
+   * \param size Object size in bytes
+   */
+  void SetObjectSize(uint32_t size);
 private:
   void StartApplication() override;
   void StopApplication() override;
@@ -18,5 +23,6 @@ private:
   void Respond(uint32_t reqId, const Address& to, const std::string& resource);
 
   Ptr<Socket> m_sock; uint16_t m_port = 8081; Time m_delay{MilliSeconds(2)};
+  uint32_t m_objectSize = 1024;  ///< Object size in bytes
 };
 }
