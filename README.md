@@ -59,6 +59,19 @@ Run with 100 requests, 10 content items, Zipf distribution, and output metrics:
 ./ns3 run http-cache-scenario -- --nReq=100 --interval=0.2 --ttl=3 --cacheCap=5 --numContent=10 --zipf=true --zipfS=1.0 --originDelay=5 --cacheDelay=1 --csv=metrics.csv --summaryCsv=summary.csv
 ```
 
+### Object Size Examples
+
+```bash
+# Small objects (images, API responses) - 10 KB
+./ns3 run http-cache-scenario -- --objectSize=10240
+
+# Medium objects (web pages) - 100 KB
+./ns3 run http-cache-scenario -- --objectSize=102400
+
+# Large objects (videos) - 10 MB
+./ns3 run http-cache-scenario -- --objectSize=10485760
+```
+
 ### Performance Testing
 
 Test cache hit rates with different parameters:
@@ -70,6 +83,15 @@ Test cache hit rates with different parameters:
 # Large cache with fewer items (high hit rate)
 ./ns3 run http-cache-scenario -- --nReq=200 --cacheCap=50 --numContent=10 --zipf=true --zipfS=0.8
 ```
+
+### Transfer Time and Object Size
+
+The simulation models realistic transfer times based on:
+- **Object size** (`--objectSize`): Size of each cached object in bytes
+- **Network bandwidth** (future): Link capacity affects transfer speed
+
+Transfer time is calculated by ns-3's packet transmission simulator based on payload size.
+Larger objects result in higher latency, especially on cache misses.
 
 ### Large-Scale Simulations
 
@@ -120,6 +142,7 @@ Simulate multiple concurrent clients (50k+ users):
 | `--csv` | string | "" | Per-request metrics CSV output path (optional) |
 | `--summaryCsv` | string | "" | Per-client summary CSV path (optional) |
 | `--globalSummaryCsv` | string | "" | Global aggregated summary CSV path (optional) |
+| `--objectSize` | uint32_t | 1024 | Object size in bytes |
 
 ## Output Formats
 
