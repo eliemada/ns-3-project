@@ -62,15 +62,17 @@ Run with 100 requests, 10 content items, Zipf distribution, and output metrics:
 ### Object Size Examples
 
 ```bash
-# Small objects (images, API responses) - 10 KB
+# Small objects (images, API responses) - 1 KB
+./ns3 run http-cache-scenario -- --objectSize=1024
+
+# Medium objects (web pages) - 10 KB
 ./ns3 run http-cache-scenario -- --objectSize=10240
 
-# Medium objects (web pages) - 100 KB
-./ns3 run http-cache-scenario -- --objectSize=102400
-
-# Large objects (videos) - 10 MB
-./ns3 run http-cache-scenario -- --objectSize=10485760
+# Large objects (media files) - 64 KB
+./ns3 run http-cache-scenario -- --objectSize=65536
 ```
+
+**⚠️ UDP Packet Size Limitation:** The current implementation uses UDP sockets, which have a maximum payload size of ~65,507 bytes (65,535 bytes minus IP and UDP headers). Object sizes exceeding this limit will cause packets to be silently dropped. For objects larger than 64 KB, consider implementing packet fragmentation or switching to TCP sockets.
 
 ### Performance Testing
 
