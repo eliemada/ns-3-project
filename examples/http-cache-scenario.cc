@@ -13,7 +13,7 @@ using namespace ns3;
 
 int main(int argc, char** argv){
   Time::SetResolution(Time::NS);
-  uint32_t nReq = 100; double interval=0.5; uint32_t cacheCap=4; double ttl=5.0;
+  uint32_t nReq = 100; double interval=0.5; double cacheCapacityGB=1.0; double ttl=5.0;
   std::string resource = "/file-A"; std::string csv = "client_metrics.csv"; std::string summaryCsv = "";
   std::string globalSummaryCsv = "";
   uint32_t numContent = 1; bool zipf = false; double zipfS = 1.0; uint32_t originDelay = 1; uint32_t cacheDelay = 1;
@@ -22,7 +22,7 @@ int main(int argc, char** argv){
   CommandLine cmd;
   cmd.AddValue("nReq", "Total client requests", nReq);
   cmd.AddValue("interval", "Seconds between requests", interval);
-  cmd.AddValue("cacheCap", "Cache capacity (entries)", cacheCap);
+  cmd.AddValue("cacheCapacityGB", "Cache capacity in gigabytes", cacheCapacityGB);
   cmd.AddValue("ttl", "TTL seconds", ttl);
   cmd.AddValue("resource", "Resource path (default if numContent==1)", resource);
   cmd.AddValue("csv", "Output CSV path", csv);
@@ -95,12 +95,21 @@ int main(int argc, char** argv){
   origin->SetStartTime(Seconds(0.1));
   origin->SetStopTime(Seconds(100));
 
+  // Calculate max objects from cache capacity in GB
+  uint64_t capacityBytes = static_cast<uint64_t>(cacheCapacityGB * 1024 * 1024 * 1024);
+  uint32_t maxObjects = static_cast<uint32_t>(capacityBytes / objectSize);
+
+  std::cout << "Cache configuration:" << std::endl;
+  std::cout << "  Capacity: " << cacheCapacityGB << " GB (" << capacityBytes << " bytes)" << std::endl;
+  std::cout << "  Object size: " << objectSize << " bytes" << std::endl;
+  std::cout << "  Max objects: " << maxObjects << std::endl;
+
   // Setup cache server
   Ptr<HttpCacheApp> cache = CreateObject<HttpCacheApp>();
   cache->SetListenPort(clientToCachePort);
   cache->SetOrigin(Address(cacheOriginInterfaces.GetAddress(1)), cacheToOriginPort);
   cache->SetTtl(Seconds(ttl));
-  cache->SetCapacity(cacheCap);
+  cache->SetCapacity(maxObjects);
   cache->SetCacheDelay(MilliSeconds(cacheDelay));
   cache->SetObjectSize(objectSize);
   cacheNode->AddApplication(cache);
