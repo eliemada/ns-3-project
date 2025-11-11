@@ -19,6 +19,8 @@ int main(int argc, char** argv){
   uint32_t numContent = 1; bool zipf = false; double zipfS = 1.0; uint32_t originDelay = 1; uint32_t cacheDelay = 1;
   uint32_t numClients = 1;
   uint32_t objectSize = 1024;  // Default 1 KB
+  uint32_t clientCacheBw = 100;  // Client-Cache link bandwidth (Mbps)
+  uint32_t cacheOriginBw = 50;   // Cache-Origin link bandwidth (Mbps)
   CommandLine cmd;
   cmd.AddValue("nReq", "Total client requests", nReq);
   cmd.AddValue("interval", "Seconds between requests", interval);
@@ -35,6 +37,8 @@ int main(int argc, char** argv){
   cmd.AddValue("originDelay", "Origin processing delay (ms)", originDelay);
   cmd.AddValue("numClients", "Number of concurrent clients", numClients);
   cmd.AddValue("objectSize", "Object size in bytes (default 1024)", objectSize);
+  cmd.AddValue("clientCacheBw", "Client-Cache link bandwidth (Mbps)", clientCacheBw);
+  cmd.AddValue("cacheOriginBw", "Cache-Origin link bandwidth (Mbps)", cacheOriginBw);
   cmd.Parse(argc, argv);
 
   // Create nodes: numClients client nodes + 1 cache node + 1 origin node
@@ -53,11 +57,15 @@ int main(int argc, char** argv){
 
   // Setup point-to-point links
   PointToPointHelper p2pClientCache;
-  p2pClientCache.SetDeviceAttribute("DataRate", StringValue("100Mbps"));
+  std::ostringstream clientCacheBwStr;
+  clientCacheBwStr << clientCacheBw << "Mbps";
+  p2pClientCache.SetDeviceAttribute("DataRate", StringValue(clientCacheBwStr.str()));
   p2pClientCache.SetChannelAttribute("Delay", StringValue("2ms"));
 
   PointToPointHelper p2pCacheOrigin;
-  p2pCacheOrigin.SetDeviceAttribute("DataRate", StringValue("50Mbps"));
+  std::ostringstream cacheOriginBwStr;
+  cacheOriginBwStr << cacheOriginBw << "Mbps";
+  p2pCacheOrigin.SetDeviceAttribute("DataRate", StringValue(cacheOriginBwStr.str()));
   p2pCacheOrigin.SetChannelAttribute("Delay", StringValue("5ms"));
 
   // Create links from each client to cache

@@ -21,7 +21,12 @@ The module consists of three main components:
 - **HttpCacheApp** - LRU cache with TTL expiration and configurable hit latency
 - **HttpOriginApp** - Origin server with configurable response delay
 
-Communication uses custom HTTP headers with request IDs, content keys, and cache hit indicators.
+Network topology:
+```
+[Clients] <--clientCacheBw--> [Cache] <--cacheOriginBw--> [Origin]
+```
+
+Communication uses custom HTTP headers with request IDs, content keys, and cache hit indicators. Network bandwidth is configurable for both client-cache and cache-origin links to model realistic network conditions.
 
 ## Installation
 
@@ -92,10 +97,44 @@ Test cache hit rates with different parameters:
 
 The simulation models realistic transfer times based on:
 - **Object size** (`--objectSize`): Size of each cached object in bytes
-- **Network bandwidth** (future): Link capacity affects transfer speed
+- **Network bandwidth** (`--clientCacheBw`, `--cacheOriginBw`): Link capacity affects transfer speed
 
-Transfer time is calculated by ns-3's packet transmission simulator based on payload size.
-Larger objects result in higher latency, especially on cache misses.
+Transfer time is calculated by ns-3's packet transmission simulator based on payload size and link bandwidth.
+Larger objects result in higher latency, especially on cache misses. Lower bandwidth increases transfer times proportionally.
+
+### Network Bandwidth Examples
+
+Configure network bandwidth to simulate different connection types and network scenarios:
+
+```bash
+# DSL/Cable clients (10 Mbps) with fiber backbone (1 Gbps)
+./ns3 run http-cache-scenario -- --clientCacheBw=10 --cacheOriginBw=1000 --objectSize=102400
+
+# Mobile clients (5 Mbps) with moderate backbone (100 Mbps)
+./ns3 run http-cache-scenario -- --clientCacheBw=5 --cacheOriginBw=100 --objectSize=51200
+
+# Fiber clients (1 Gbps) with congested cache uplink (50 Mbps bottleneck)
+./ns3 run http-cache-scenario -- --clientCacheBw=1000 --cacheOriginBw=50 --objectSize=1048576
+
+# Symmetric gigabit links (ideal CDN scenario)
+./ns3 run http-cache-scenario -- --clientCacheBw=1000 --cacheOriginBw=1000
+
+# Satellite/high-latency connection (slow uplink)
+./ns3 run http-cache-scenario -- --clientCacheBw=25 --cacheOriginBw=10 --objectSize=10240
+```
+
+**Common Bandwidth Values:**
+- **DSL**: 1-25 Mbps
+- **Cable**: 10-100 Mbps
+- **Fiber**: 100-1000 Mbps
+- **Mobile 4G**: 5-50 Mbps
+- **Mobile 5G**: 50-1000 Mbps
+- **Datacenter/Backbone**: 1000-10000 Mbps (1-10 Gbps)
+
+**Impact on Latency:**
+Transfer time (ms) ≈ (Object size in bytes × 8) / (Bandwidth in Mbps × 1000)
+
+Example: A 1 MB object over 10 Mbps link takes ~800ms to transfer, while the same object over 1000 Mbps takes ~8ms.
 
 ### Large-Scale Simulations
 
@@ -147,6 +186,8 @@ Simulate multiple concurrent clients (50k+ users):
 | `--summaryCsv` | string | "" | Per-client summary CSV path (optional) |
 | `--globalSummaryCsv` | string | "" | Global aggregated summary CSV path (optional) |
 | `--objectSize` | uint32_t | 1024 | Object size in bytes |
+| `--clientCacheBw` | uint32_t | 100 | Client-Cache link bandwidth (Mbps) |
+| `--cacheOriginBw` | uint32_t | 50 | Cache-Origin link bandwidth (Mbps) |
 
 ## Output Formats
 
