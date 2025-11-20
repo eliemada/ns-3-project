@@ -49,6 +49,10 @@ private:
 
   // pending miss state: reqId -> client Address
   std::unordered_map<uint32_t, Address> m_waiting;
+  // To avoid request id collisions across clients, use a unique forward id when
+  // forwarding to origin: forwardId -> (originalReqId, client Address)
+  uint32_t m_nextForwardId = 1;
+  std::unordered_map<uint32_t, std::pair<uint32_t, Address>> m_forwarding;
 };
 
 } // namespace ns3

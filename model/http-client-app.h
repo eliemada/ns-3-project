@@ -40,6 +40,13 @@ public:
   void SetNumContent(uint32_t n);
   void SetZipf(bool z);
   void SetZipfS(double s);
+  
+  // Streaming mode: pick a service via Zipf, then fetch numSegments sequentially
+  void SetNumServices(uint32_t n);
+  void SetNumSegments(uint32_t n);
+  void SetSegmentInterval(Time t);
+  void SetTotalTime(Time t);
+  void SetStreaming(bool s);
 
   /**
    * \brief Set the size of objects to request
@@ -81,6 +88,16 @@ private:
   double m_zipfS = 1.0;
   Ptr<UniformRandomVariable> m_uni;
   std::vector<double> m_zipfCum;
+  // Streaming-mode parameters
+  uint32_t m_numServices = 1;
+  uint32_t m_numSegments = 1;
+  Time m_segmentInterval{Seconds(1)};
+  Time m_totalTime{Seconds(100)};
+  bool m_streaming = false;
+  // streaming state
+  uint32_t m_currentService = 0;
+  uint32_t m_nextSegment = 1;
+  bool m_inSequence = false;
   uint32_t m_objectSize = 1024;  ///< Object size in bytes
 };
 

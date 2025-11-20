@@ -63,10 +63,15 @@ void HttpCacheApp::HandleClientRead(Ptr<Socket> sock){
       Simulator::Schedule(m_cacheDelay, &HttpCacheApp::ReplyToClient, this, hdr.GetRequestId(), key, true, from);
     } else {
       NS_LOG_INFO("Cache MISS key=" << key);
-      // miss -> forward to origin
-      m_waiting[hdr.GetRequestId()] = from;
+      // miss -> forward to origin. Use a unique forward id to avoid collisions
+      // between clients that may reuse the same numeric request id.
+      uint32_t origReqId = hdr.GetRequestId();
+      uint32_t fid = m_nextForwardId++;
+      m_forwarding[fid] = std::make_pair(origReqId, from);
+      // replace header request id with forward id when sending to origin
+      HttpHeader fhdr(fid, key);
       Ptr<Packet> fwd = Create<Packet>(m_objectSize);
-      fwd->AddHeader(hdr);
+      fwd->AddHeader(fhdr);
       m_originSock->Send(fwd);
     }
   }
@@ -77,12 +82,16 @@ void HttpCacheApp::HandleOriginRead(Ptr<Socket> sock){
   while ((p = sock->RecvFrom(from))){
     HttpHeader hdr; p->RemoveHeader(hdr);
     std::string key = hdr.GetResource(); // origin echoes key
-    // store and reply to waiting client
+    // store and reply to waiting client. The origin returns the forward id as
+    // the request id; look up the original client request id and address.
     Insert(key, "data");
-    auto it = m_waiting.find(hdr.GetRequestId());
-    if (it != m_waiting.end()){
-      ReplyToClient(hdr.GetRequestId(), key, false, it->second);
-      m_waiting.erase(it);
+    uint32_t fid = hdr.GetRequestId();
+    auto itf = m_forwarding.find(fid);
+    if (itf != m_forwarding.end()){
+      uint32_t origReqId = itf->second.first;
+      Address clientAddr = itf->second.second;
+      ReplyToClient(origReqId, key, false, clientAddr);
+      m_forwarding.erase(itf);
     }
   }
 }

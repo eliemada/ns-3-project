@@ -7,3 +7,13 @@ build_lib_example(
     ${libapplications}
     ${libpoint-to-point}
 )
+
+build_lib_example(
+  NAME http-cache-video-streaming
+  SOURCE_FILES http-cache-video-streaming.cc
+  LIBRARIES_TO_LINK
+    ${libhttp-cache}
+    ${libinternet}
+    ${libapplications}
+    ${libpoint-to-point}
+)

@@ -79,6 +79,13 @@ The cache capacity is now specified in gigabytes (GB), with the maximum number o
 ./ns3 run http-cache-scenario -- --objectSize=10485760 --cacheCapacityGB=10
 ```
 
+You can also specify cache capacity directly in number of objects (convenient when all objects are the same size):
+
+```bash
+# Set cache capacity to 100000 objects (object size still set via --objectSize)
+./ns3 run http-cache-scenario -- --cacheCapacityObjs=100000 --objectSize=1024
+```
+
 **⚠️ UDP Packet Size Limitation:** The current implementation uses UDP sockets, which have a maximum payload size of ~65,507 bytes (65,535 bytes minus IP and UDP headers). Object sizes exceeding this limit will cause packets to be silently dropped. For objects larger than 64 KB, consider implementing packet fragmentation or switching to TCP sockets.
 
 ### Performance Testing
@@ -152,12 +159,16 @@ Simulate multiple concurrent clients (50k+ users):
 
 # 100,000 concurrent clients (extreme scale - no CSV for speed, 20 GB cache)
 ./ns3 run "http-cache-scenario --numClients=100000 --nReq=5 --numContent=15 --cacheCapacityGB=20 --zipf=true"
+
+# For large-scale experiments you can also specify capacity in objects for clarity:
+./ns3 run "http-cache-scenario --numClients=100000 --nReq=5 --numContent=15 --cacheCapacityObjs=200000 --objectSize=1048576 --zipf=true"
 ```
 
 **CSV Output Options:**
 - `--csv=file.csv` - Per-request metrics for each client (creates N files for N clients)
 - `--summaryCsv=file.csv` - Per-content summary for each client (creates N files for N clients)
 - `--globalSummaryCsv=file.csv` - **Single aggregated summary across all clients** (recommended for large-scale)
+ - `--serviceSummaryCsv=file.csv` - Single aggregated service-level summary across all clients (optional)
 - Omit all CSV flags for maximum performance
 
 **⚠️ WARNING - Large-Scale Simulations:**
@@ -176,6 +187,7 @@ Simulate multiple concurrent clients (50k+ users):
 | `--interval` | double | 0.5 | Time interval between requests (seconds) |
 | `--ttl` | uint32_t | 10 | Cache TTL for content (seconds) |
 | `--cacheCapacityGB` | double | 1.0 | Cache capacity in gigabytes (max objects = capacity_bytes / objectSize) |
+| `--cacheCapacityObjs` | uint32_t | 0 | Cache capacity expressed as number of objects (if >0, overrides `--cacheCapacityGB`) |
 | `--numClients` | uint32_t | 1 | Number of concurrent clients (supports 50k+) |
 | `--numContent` | uint32_t | 1 | Number of distinct content items (1 = fixed resource) |
 | `--zipf` | bool | false | Use Zipf distribution for content popularity |
@@ -185,6 +197,7 @@ Simulate multiple concurrent clients (50k+ users):
 | `--csv` | string | "" | Per-request metrics CSV output path (optional) |
 | `--summaryCsv` | string | "" | Per-client summary CSV path (optional) |
 | `--globalSummaryCsv` | string | "" | Global aggregated summary CSV path (optional) |
+| `--serviceSummaryCsv` | string | "" | Service-level aggregated summary CSV path (optional) |
 | `--objectSize` | uint32_t | 1024 | Object size in bytes |
 | `--clientCacheBw` | uint32_t | 100 | Client-Cache link bandwidth (Mbps) |
 | `--cacheOriginBw` | uint32_t | 50 | Cache-Origin link bandwidth (Mbps) |
@@ -231,6 +244,17 @@ content_2,30,25,5,83.33,6.789,5.234,15.456,5.678,15.123
 - `max_latency_ms` - Maximum observed latency
 - `avg_hit_latency_ms` - Average latency for cache hits
 - `avg_miss_latency_ms` - Average latency for cache misses
+
+### Service-level Summary CSV
+
+Generated when `--serviceSummaryCsv` is specified. Aggregates per-segment stats into per-service stats. The CSV contains one row per service with this header:
+
+```csv
+service,total_requests,cache_hits,cache_misses,hit_rate_percent,avg_latency_ms,min_latency_ms,max_latency_ms,avg_hit_latency_ms,avg_miss_latency_ms
+service-2,2,1,1,50,10,5,15,5,15
+```
+
+The service name is derived from content keys by stripping the trailing segment component. For example, `/service-2/seg-1` becomes `service-2`.
 
 ## Module Files
 

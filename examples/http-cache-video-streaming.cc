@@ -13,29 +13,35 @@ using namespace ns3;
 
 int main(int argc, char** argv){
   Time::SetResolution(Time::NS);
-  uint32_t nReq = 100; double interval=0.5; double cacheCapacityGB=1.0; double ttl=5.0;
+  uint32_t numClients = 1;
+  double totalTime = 100.0; // seconds
+  uint32_t numServices = 1;
+  uint32_t numSegments = 1;
+  double segmentInterval = 1.0; // seconds
+  double cacheCapacityGB=1.0; double ttl=5.0;
   uint32_t cacheCapacityObjs = 0; // if >0, overrides cacheCapacityGB
-  std::string resource = "/file-A"; std::string csv = "client_metrics.csv"; std::string summaryCsv = "";
+  std::string csv = "client_metrics.csv"; std::string summaryCsv = "";
   std::string globalSummaryCsv = "";
   std::string serviceSummaryCsv = "";
-  uint32_t numContent = 1; bool zipf = false; double zipfS = 1.0; uint32_t originDelay = 1; uint32_t cacheDelay = 1;
-  uint32_t numClients = 1;
-  uint32_t objectSize = 1024;  // Default 1 KB
-  uint32_t clientCacheBw = 1000000;  // Client-Cache link bandwidth (Mbps)
-  uint32_t cacheOriginBw = 1000000;   // Cache-Origin link bandwidth (Mbps)
+  bool zipf = false; double zipfS = 1.0;
+  uint32_t originDelay = 1; uint32_t cacheDelay = 1;
+  uint32_t objectSize = 1024;
+  uint32_t clientCacheBw = 100; uint32_t cacheOriginBw = 50;
+
   CommandLine cmd;
-  cmd.AddValue("nReq", "Total client requests", nReq);
-  cmd.AddValue("interval", "Seconds between requests", interval);
+  cmd.AddValue("numClients", "Number of concurrent clients", numClients);
+  cmd.AddValue("totalTime", "Total simulation time (seconds)", totalTime);
+  cmd.AddValue("numServices", "Number of streaming services (Zipf pick among these)", numServices);
+  cmd.AddValue("numSegments", "Number of sequential segments per selection", numSegments);
+  cmd.AddValue("segmentInterval", "Seconds between sequential segments", segmentInterval);
   cmd.AddValue("cacheCapacityGB", "Cache capacity in gigabytes", cacheCapacityGB);
   cmd.AddValue("cacheCapacityObjs", "Cache capacity in number of objects (overrides cacheCapacityGB)", cacheCapacityObjs);
   cmd.AddValue("ttl", "TTL seconds", ttl);
-  cmd.AddValue("resource", "Resource path (default if numContent==1)", resource);
   cmd.AddValue("csv", "Output CSV path", csv);
   cmd.AddValue("summaryCsv", "Summary statistics CSV path (optional)", summaryCsv);
   cmd.AddValue("globalSummaryCsv", "Global aggregated summary CSV path (optional)", globalSummaryCsv);
   cmd.AddValue("serviceSummaryCsv", "Service-level aggregated summary CSV path (optional)", serviceSummaryCsv);
-  cmd.AddValue("numContent", "Number of distinct content items (1 = fixed resource)", numContent);
-  cmd.AddValue("zipf", "Use Zipf popularity over resources", zipf);
+  cmd.AddValue("zipf", "Use Zipf popularity over services", zipf);
   cmd.AddValue("zipfS", "Zipf exponent s (>0)", zipfS);
   cmd.AddValue("cacheDelay", "Cache processing delay for hits (ms)", cacheDelay);
   cmd.AddValue("originDelay", "Origin processing delay (ms)", originDelay);
@@ -45,40 +51,29 @@ int main(int argc, char** argv){
   cmd.AddValue("cacheOriginBw", "Cache-Origin link bandwidth (Mbps)", cacheOriginBw);
   cmd.Parse(argc, argv);
 
-  // Create nodes: numClients client nodes + 1 cache node + 1 origin node
-  NodeContainer clientNodes;
-  clientNodes.Create(numClients);
+  // Nodes
+  NodeContainer clientNodes; clientNodes.Create(numClients);
+  NodeContainer serverNodes; serverNodes.Create(2);
+  NodeContainer allNodes; allNodes.Add(clientNodes); allNodes.Add(serverNodes);
+  Ptr<Node> cacheNode = serverNodes.Get(0);
+  Ptr<Node> originNode = serverNodes.Get(1);
 
-  NodeContainer serverNodes;
-  serverNodes.Create(2);  // cache and origin
+  InternetStackHelper internet; internet.Install(allNodes);
 
-  NodeContainer allNodes;
-  allNodes.Add(clientNodes);
-  allNodes.Add(serverNodes);
-
-  InternetStackHelper internet;
-  internet.Install(allNodes);
-
-  // Setup point-to-point links
+  // Links
   PointToPointHelper p2pClientCache;
-  std::ostringstream clientCacheBwStr;
-  clientCacheBwStr << clientCacheBw << "Mbps";
+  std::ostringstream clientCacheBwStr; clientCacheBwStr << clientCacheBw << "Mbps";
   p2pClientCache.SetDeviceAttribute("DataRate", StringValue(clientCacheBwStr.str()));
   p2pClientCache.SetChannelAttribute("Delay", StringValue("2ms"));
 
   PointToPointHelper p2pCacheOrigin;
-  std::ostringstream cacheOriginBwStr;
-  cacheOriginBwStr << cacheOriginBw << "Mbps";
+  std::ostringstream cacheOriginBwStr; cacheOriginBwStr << cacheOriginBw << "Mbps";
   p2pCacheOrigin.SetDeviceAttribute("DataRate", StringValue(cacheOriginBwStr.str()));
   p2pCacheOrigin.SetChannelAttribute("Delay", StringValue("5ms"));
 
-  // Create links from each client to cache
   std::vector<NetDeviceContainer> clientCacheDevices(numClients);
   std::vector<Ipv4InterfaceContainer> clientCacheInterfaces(numClients);
-
   Ipv4AddressHelper ip;
-  Ptr<Node> cacheNode = serverNodes.Get(0);
-  Ptr<Node> originNode = serverNodes.Get(1);
 
   for (uint32_t i = 0; i < numClients; ++i) {
     clientCacheDevices[i] = p2pClientCache.Install(clientNodes.Get(i), cacheNode);
@@ -88,26 +83,24 @@ int main(int argc, char** argv){
     clientCacheInterfaces[i] = ip.Assign(clientCacheDevices[i]);
   }
 
-  // Create link from cache to origin
   NetDeviceContainer cacheOriginDevices = p2pCacheOrigin.Install(cacheNode, originNode);
   ip.SetBase("192.168.1.0", "255.255.255.0");
   Ipv4InterfaceContainer cacheOriginInterfaces = ip.Assign(cacheOriginDevices);
 
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
-  uint16_t clientToCachePort = 8080;
-  uint16_t cacheToOriginPort = 8081;
+  uint16_t clientToCachePort = 8080; uint16_t cacheToOriginPort = 8081;
 
-  // Setup origin server
+  // Origin app
   Ptr<HttpOriginApp> origin = CreateObject<HttpOriginApp>();
   origin->SetListenPort(cacheToOriginPort);
   origin->SetServiceDelay(MilliSeconds(originDelay));
   origin->SetObjectSize(objectSize);
   originNode->AddApplication(origin);
   origin->SetStartTime(Seconds(0.1));
-  origin->SetStopTime(Seconds(100));
+  origin->SetStopTime(Seconds(totalTime + 1.0));
 
-  // Calculate max objects from cache capacity: either user-specified objects or GB
+  // Cache app: compute capacity either from objects flag or GB flag
   uint64_t capacityBytes = 0;
   uint32_t maxObjects = 0;
   if (cacheCapacityObjs > 0) {
@@ -117,7 +110,6 @@ int main(int argc, char** argv){
     capacityBytes = static_cast<uint64_t>(cacheCapacityGB * 1024 * 1024 * 1024);
     maxObjects = static_cast<uint32_t>(capacityBytes / objectSize);
   }
-
   std::cout << "Cache configuration:" << std::endl;
   if (cacheCapacityObjs > 0) {
     std::cout << "  Capacity: " << maxObjects << " objects (" << capacityBytes << " bytes)" << std::endl;
@@ -126,8 +118,6 @@ int main(int argc, char** argv){
   }
   std::cout << "  Object size: " << objectSize << " bytes" << std::endl;
   std::cout << "  Max objects: " << maxObjects << std::endl;
-
-  // Setup cache server
   Ptr<HttpCacheApp> cache = CreateObject<HttpCacheApp>();
   cache->SetListenPort(clientToCachePort);
   cache->SetOrigin(Address(cacheOriginInterfaces.GetAddress(1)), cacheToOriginPort);
@@ -137,43 +127,41 @@ int main(int argc, char** argv){
   cache->SetObjectSize(objectSize);
   cacheNode->AddApplication(cache);
   cache->SetStartTime(Seconds(0.2));
-  cache->SetStopTime(Seconds(100));
+  cache->SetStopTime(Seconds(totalTime + 1.0));
 
-  // Setup client applications
-  std::vector<Ptr<HttpClientApp>> clientApps;  // Store for global summary
+  // Clients
+  std::vector<Ptr<HttpClientApp>> clientApps;
   for (uint32_t i = 0; i < numClients; ++i) {
     Ptr<HttpClientApp> client = CreateObject<HttpClientApp>();
     client->SetRemote(Address(clientCacheInterfaces[i].GetAddress(1)), clientToCachePort);
-    client->SetInterval(Seconds(interval));
-    client->SetResource(resource);
-    client->SetNumContent(numContent);
+    client->SetObjectSize(objectSize);
+    // Streaming-specific settings
+    client->SetNumServices(numServices);
+    client->SetNumSegments(numSegments);
+    client->SetSegmentInterval(Seconds(segmentInterval));
     client->SetZipf(zipf);
     client->SetZipfS(zipfS);
-    client->SetTotalRequests(nReq);
-    client->SetObjectSize(objectSize);
+    client->SetStreaming(true);
+    client->SetTotalTime(Seconds(totalTime));
 
-    // Set CSV paths with client index if multiple clients
+    // CSV paths
     if (!csv.empty()) {
       if (numClients > 1) {
         size_t dotPos = csv.find_last_of('.');
         std::string baseName = (dotPos != std::string::npos) ? csv.substr(0, dotPos) : csv;
         std::string extension = (dotPos != std::string::npos) ? csv.substr(dotPos) : "";
-        std::ostringstream csvPath;
-        csvPath << baseName << "_client_" << i << extension;
+        std::ostringstream csvPath; csvPath << baseName << "_client_" << i << extension;
         client->SetCsvPath(csvPath.str());
       } else {
         client->SetCsvPath(csv);
       }
     }
-
-    // Set summary CSV paths with client index if multiple clients
     if (!summaryCsv.empty()) {
       if (numClients > 1) {
         size_t dotPos = summaryCsv.find_last_of('.');
         std::string baseName = (dotPos != std::string::npos) ? summaryCsv.substr(0, dotPos) : summaryCsv;
         std::string extension = (dotPos != std::string::npos) ? summaryCsv.substr(dotPos) : "";
-        std::ostringstream summaryPath;
-        summaryPath << baseName << "_client_" << i << extension;
+        std::ostringstream summaryPath; summaryPath << baseName << "_client_" << i << extension;
         client->SetSummaryCsvPath(summaryPath.str());
       } else {
         client->SetSummaryCsvPath(summaryCsv);
@@ -182,30 +170,25 @@ int main(int argc, char** argv){
 
     clientNodes.Get(i)->AddApplication(client);
     client->SetStartTime(Seconds(0.3));
-    client->SetStopTime(Seconds(99.9));
-
-    clientApps.push_back(client);  // Store for global summary
+    client->SetStopTime(Seconds(totalTime + 1.0));
+    clientApps.push_back(client);
   }
 
-  std::cout << "Starting simulation with " << numClients << " client(s)..." << std::endl;
+  std::cout << "Starting streaming simulation with " << numClients << " client(s) for " << totalTime << "s..." << std::endl;
 
-  Simulator::Stop(Seconds(100));
+  Simulator::Stop(Seconds(totalTime + 1.0));
   Simulator::Run();
   std::cout << "Simulation completed successfully!" << std::endl;
 
-  // Write global summary CSV if requested
+  // Global summary aggregation
   if (!globalSummaryCsv.empty()) {
     std::cout << "Writing global summary CSV..." << std::endl;
-
-    // Aggregate statistics from all clients
     std::unordered_map<std::string, HttpClientApp::ContentStats> globalStats;
-
     for (const auto& client : clientApps) {
       const auto& clientStats = client->GetContentStats();
       for (const auto& pair : clientStats) {
         const std::string& content = pair.first;
         const HttpClientApp::ContentStats& stats = pair.second;
-
         auto& global = globalStats[content];
         global.totalRequests += stats.totalRequests;
         global.cacheHits += stats.cacheHits;
@@ -217,20 +200,15 @@ int main(int argc, char** argv){
         global.maxLatency = std::max(global.maxLatency, stats.maxLatency);
       }
     }
-
-    // Write global summary CSV
     std::ofstream globalSummary(globalSummaryCsv, std::ios::out);
     globalSummary << "content,total_requests,cache_hits,cache_misses,hit_rate_percent,avg_latency_ms,min_latency_ms,max_latency_ms,avg_hit_latency_ms,avg_miss_latency_ms\n";
-
     for (const auto& pair : globalStats) {
       const std::string& content = pair.first;
       const HttpClientApp::ContentStats& stats = pair.second;
-
       double hitRate = (stats.totalRequests > 0) ? (100.0 * stats.cacheHits / stats.totalRequests) : 0.0;
       double avgLatency = (stats.totalRequests > 0) ? (stats.totalLatency / stats.totalRequests) : 0.0;
       double avgHitLatency = (stats.cacheHits > 0) ? (stats.totalHitLatency / stats.cacheHits) : 0.0;
       double avgMissLatency = (stats.cacheMisses > 0) ? (stats.totalMissLatency / stats.cacheMisses) : 0.0;
-
       globalSummary << content << ","
                     << stats.totalRequests << ","
                     << stats.cacheHits << ","
@@ -242,7 +220,6 @@ int main(int argc, char** argv){
                     << avgHitLatency << ","
                     << avgMissLatency << "\n";
     }
-
     globalSummary.close();
     std::cout << "Global summary written to: " << globalSummaryCsv << std::endl;
     // Optionally write a service-level aggregated CSV

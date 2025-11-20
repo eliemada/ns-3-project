@@ -31,6 +31,12 @@ void HttpClientApp::SetNumContent(uint32_t n){ m_numContent = std::max(1u, n); }
 void HttpClientApp::SetZipf(bool z){ m_zipf = z; }
 void HttpClientApp::SetZipfS(double s){ m_zipfS = s > 0 ? s : 1.0; }
 
+void HttpClientApp::SetNumServices(uint32_t n) { m_numServices = std::max(1u, n); }
+void HttpClientApp::SetNumSegments(uint32_t n) { m_numSegments = std::max(1u, n); }
+void HttpClientApp::SetSegmentInterval(Time t) { m_segmentInterval = t; }
+void HttpClientApp::SetTotalTime(Time t) { m_totalTime = t; }
+void HttpClientApp::SetStreaming(bool s) { m_streaming = s; }
+
 void HttpClientApp::SetObjectSize(uint32_t size) {
   m_objectSize = size;
 }
@@ -46,14 +52,28 @@ void HttpClientApp::StartApplication(){
   m_csv << "request_id,content,send_s,recv_s,latency_ms,cache_hit\n";
 
   m_uni = CreateObject<UniformRandomVariable>();
-  if (m_numContent > 1 && m_zipf){
-    m_zipfCum.resize(m_numContent);
-    double sum = 0.0;
-    for (uint32_t k=1; k<=m_numContent; ++k) sum += 1.0 / std::pow((double)k, m_zipfS);
-    double run = 0.0;
-    for (uint32_t k=1; k<=m_numContent; ++k){
-      run += (1.0 / std::pow((double)k, m_zipfS)) / sum;
-      m_zipfCum[k-1] = run;
+  // Build Zipf CDF depending on mode: services (streaming) or content (regular)
+  if (m_streaming) {
+    if (m_numServices > 1 && m_zipf) {
+      m_zipfCum.resize(m_numServices);
+      double sum = 0.0;
+      for (uint32_t k=1; k<=m_numServices; ++k) sum += 1.0 / std::pow((double)k, m_zipfS);
+      double run = 0.0;
+      for (uint32_t k=1; k<=m_numServices; ++k){
+        run += (1.0 / std::pow((double)k, m_zipfS)) / sum;
+        m_zipfCum[k-1] = run;
+      }
+    }
+  } else {
+    if (m_numContent > 1 && m_zipf){
+      m_zipfCum.resize(m_numContent);
+      double sum = 0.0;
+      for (uint32_t k=1; k<=m_numContent; ++k) sum += 1.0 / std::pow((double)k, m_zipfS);
+      double run = 0.0;
+      for (uint32_t k=1; k<=m_numContent; ++k){
+        run += (1.0 / std::pow((double)k, m_zipfS)) / sum;
+        m_zipfCum[k-1] = run;
+      }
     }
   }
   ScheduleNext();
@@ -65,20 +85,53 @@ void HttpClientApp::StopApplication(){
 }
 
 void HttpClientApp::ScheduleNext(){
-  if (m_sent >= m_total) return;
-  m_event = Simulator::Schedule(m_interval, &HttpClientApp::SendOne, this);
+  if (m_streaming) {
+    // Stop when simulation time reached
+    if (Simulator::Now() >= m_totalTime) return;
+    m_event = Simulator::Schedule(m_segmentInterval, &HttpClientApp::SendOne, this);
+  } else {
+    if (m_sent >= m_total) return;
+    m_event = Simulator::Schedule(m_interval, &HttpClientApp::SendOne, this);
+  }
 }
 
 std::string HttpClientApp::PickResource(){
-  if (m_numContent <= 1) return m_resource;
-  uint32_t idx = 0;
-  if (m_zipf && !m_zipfCum.empty()){
-    double r = m_uni->GetValue(0.0, 1.0);
-    for (uint32_t i=0;i<m_zipfCum.size();++i){ if (m_zipfCum[i] >= r){ idx = i; break; } }
-  } else {
-    idx = (uint32_t) m_uni->GetInteger(0, (int64_t)m_numContent-1);
+  if (!m_streaming) {
+    if (m_numContent <= 1) return m_resource;
+    uint32_t idx = 0;
+    if (m_zipf && !m_zipfCum.empty()){
+      double r = m_uni->GetValue(0.0, 1.0);
+      for (uint32_t i=0;i<m_zipfCum.size();++i){ if (m_zipfCum[i] >= r){ idx = i; break; } }
+    } else {
+      idx = (uint32_t) m_uni->GetInteger(0, (int64_t)m_numContent-1);
+    }
+    return std::string("/file-") + std::to_string(idx+1);
   }
-  return std::string("/file-") + std::to_string(idx+1);
+
+  // Streaming mode: pick or continue a service sequence
+  if (!m_inSequence) {
+    // pick a service index
+    uint32_t sidx = 0;
+    if (m_zipf && !m_zipfCum.empty()){
+      double r = m_uni->GetValue(0.0, 1.0);
+      for (uint32_t i=0;i<m_zipfCum.size();++i){ if (m_zipfCum[i] >= r){ sidx = i; break; } }
+    } else {
+      sidx = (uint32_t) m_uni->GetInteger(0, (int64_t)m_numServices-1);
+    }
+    m_currentService = sidx + 1; // services are 1-based in names
+    m_nextSegment = 1;
+    m_inSequence = true;
+  }
+
+  // build resource name: /service-X/seg-Y
+  std::string res = std::string("/service-") + std::to_string(m_currentService)
+                    + std::string("/seg-") + std::to_string(m_nextSegment);
+  // advance segment index for next call
+  m_nextSegment++;
+  if (m_nextSegment > m_numSegments) {
+    m_inSequence = false; // finished this service sequence
+  }
+  return res;
 }
 
 void HttpClientApp::SendOne(){
@@ -90,7 +143,8 @@ void HttpClientApp::SendOne(){
   m_sendTimes[id] = std::make_pair(Simulator::Now(), res);
   NS_LOG_INFO("Client sending id=" << id << " res=" << res);
   m_socket->Send(p);
-  m_sent++;
+  // increment sent counter in non-streaming mode to preserve behavior
+  if (!m_streaming) m_sent++;
   ScheduleNext();
 }
 
