@@ -26,6 +26,102 @@ void HttpCacheApp::SetObjectSize(uint32_t size) {
   m_objectSize = size;
 }
 
+void HttpCacheApp::SetDynamicTtlEnabled(bool enabled) {
+  m_dynamicTtlEnabled = enabled;
+}
+
+void HttpCacheApp::SetTtlWindow(Time window) {
+  m_ttlWindow = window;
+}
+
+void HttpCacheApp::SetTtlThreshold(double threshold) {
+  m_ttlThreshold = threshold;
+}
+
+void HttpCacheApp::SetTtlReduction(double reduction) {
+  m_ttlReduction = reduction;
+}
+
+void HttpCacheApp::SetTtlEvalInterval(Time interval) {
+  m_ttlEvalInterval = interval;
+}
+
+std::string HttpCacheApp::ExtractService(const std::string& resource) {
+  // Parse "/service-X/seg-Y" -> "service-X"
+  // Or "/service-X" -> "service-X"
+  if (resource.empty()) return "";
+
+  size_t start = (resource[0] == '/') ? 1 : 0;
+  size_t end = resource.find('/', start);
+
+  if (end == std::string::npos) {
+    return resource.substr(start);
+  }
+  return resource.substr(start, end - start);
+}
+
+void HttpCacheApp::RecordRequest(const std::string& service) {
+  if (!m_dynamicTtlEnabled || service.empty()) return;
+
+  Time now = Simulator::Now();
+
+  // Create new bucket if needed
+  if (m_buckets.empty() || (now - m_buckets.back().startTime) >= m_bucketDuration) {
+    TimeBucket bucket;
+    bucket.startTime = now;
+    m_buckets.push_back(bucket);
+  }
+
+  // Increment count for this service in current bucket
+  m_buckets.back().serviceRequests[service]++;
+}
+
+Time HttpCacheApp::GetEffectiveTtl(const std::string& service) {
+  if (!m_dynamicTtlEnabled) return m_ttl;
+
+  if (m_penalizedServices.count(service) > 0) {
+    return m_ttl * (1.0 - m_ttlReduction);
+  }
+  return m_ttl;
+}
+
+void HttpCacheApp::EvaluatePolicy() {
+  if (!m_dynamicTtlEnabled) return;
+
+  Time now = Simulator::Now();
+  Time cutoff = now - m_ttlWindow;
+
+  // 1. Prune old buckets outside the window
+  while (!m_buckets.empty() && m_buckets.front().startTime < cutoff) {
+    m_buckets.pop_front();
+  }
+
+  // 2. Aggregate requests per service
+  std::unordered_map<std::string, uint32_t> totals;
+  uint32_t grandTotal = 0;
+  for (const auto& bucket : m_buckets) {
+    for (const auto& pair : bucket.serviceRequests) {
+      totals[pair.first] += pair.second;
+      grandTotal += pair.second;
+    }
+  }
+
+  // 3. Determine penalized services
+  m_penalizedServices.clear();
+  if (grandTotal > 0) {
+    for (const auto& pair : totals) {
+      double share = static_cast<double>(pair.second) / grandTotal;
+      if (share > m_ttlThreshold) {
+        m_penalizedServices.insert(pair.first);
+        NS_LOG_INFO("Dynamic TTL: service " << pair.first << " penalized (share=" << share << ")");
+      }
+    }
+  }
+
+  // 4. Schedule next evaluation
+  Simulator::Schedule(m_ttlEvalInterval, &HttpCacheApp::EvaluatePolicy, this);
+}
+
 void HttpCacheApp::StartApplication(){
   m_clientSock = Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
   m_clientSock->Bind(InetSocketAddress(Ipv4Address::GetAny(), m_listenPort));
@@ -35,6 +131,11 @@ void HttpCacheApp::StartApplication(){
   m_originSock->Bind();
   m_originSock->Connect(InetSocketAddress(Ipv4Address::ConvertFrom(m_originAddr), m_originPort));
   m_originSock->SetRecvCallback(MakeCallback(&HttpCacheApp::HandleOriginRead, this));
+
+  // Start dynamic TTL policy evaluation if enabled
+  if (m_dynamicTtlEnabled) {
+    Simulator::Schedule(m_ttlEvalInterval, &HttpCacheApp::EvaluatePolicy, this);
+  }
 }
 void HttpCacheApp::StopApplication(){ if (m_clientSock) m_clientSock->Close(); if (m_originSock) m_originSock->Close(); }
 
@@ -47,7 +148,8 @@ void HttpCacheApp::Insert(const std::string& key, const std::string& val){
     std::string evictKey = m_lru.back(); m_lru.pop_back(); m_map.erase(evictKey);
   }
   m_lru.push_front(key);
-  m_map[key] = Entry{val, now + m_ttl, m_lru.begin()};
+  std::string service = ExtractService(key);
+  m_map[key] = Entry{val, now + GetEffectiveTtl(service), m_lru.begin()};
 }
 
 void HttpCacheApp::HandleClientRead(Ptr<Socket> sock){
@@ -55,6 +157,8 @@ void HttpCacheApp::HandleClientRead(Ptr<Socket> sock){
   while ((p = sock->RecvFrom(from))){
     HttpHeader hdr; p->RemoveHeader(hdr);
     std::string key = hdr.GetResource();
+    std::string service = ExtractService(key);
+    RecordRequest(service);
     auto it = m_map.find(key);
     auto now = Simulator::Now();
     if (it != m_map.end() && it->second.expiry > now){

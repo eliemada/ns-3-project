@@ -202,6 +202,23 @@ Simulate multiple concurrent clients (50k+ users):
 | `--clientCacheBw` | uint32_t | 100 | Client-Cache link bandwidth (Mbps) |
 | `--cacheOriginBw` | uint32_t | 50 | Cache-Origin link bandwidth (Mbps) |
 
+### Dynamic TTL Policy
+
+The cache supports a dynamic TTL policy that penalizes services dominating request share:
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--dynamicTtl` | Enable dynamic TTL policy | `false` |
+| `--ttlWindow` | Sliding window duration (seconds) | `300` |
+| `--ttlThreshold` | Request share threshold (0.0-1.0) | `0.5` |
+| `--ttlReduction` | TTL reduction factor (0.0-1.0) | `0.5` |
+| `--ttlEvalInterval` | Evaluation interval (seconds) | `30` |
+
+Example: Penalize services exceeding 40% of requests with 60% TTL reduction:
+```bash
+./ns3 run "http-cache-video-streaming --dynamicTtl=true --ttlThreshold=0.4 --ttlReduction=0.6"
+```
+
 ## Output Formats
 
 ### Per-Request Metrics CSV
