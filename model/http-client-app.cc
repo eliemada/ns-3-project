@@ -48,8 +48,10 @@ void HttpClientApp::StartApplication(){
     m_socket->Connect(InetSocketAddress(Ipv4Address::ConvertFrom(m_peer), m_port));
     m_socket->SetRecvCallback(MakeCallback(&HttpClientApp::HandleRead, this));
   }
-  m_csv.open(m_csvPath, std::ios::out);
-  m_csv << "request_id,content,send_s,recv_s,latency_ms,cache_hit\n";
+  if (!m_csvPath.empty()) {
+    m_csv.open(m_csvPath, std::ios::out);
+    m_csv << "request_id,content,send_s,recv_s,latency_ms,cache_hit\n";
+  }
 
   m_uni = CreateObject<UniformRandomVariable>();
   // Build Zipf CDF depending on mode: services (streaming) or content (regular)
@@ -160,8 +162,10 @@ void HttpClientApp::HandleRead(Ptr<Socket> socket){
       double lat_ms = (r - s).GetMilliSeconds();
       bool hit = (!hdr.GetResource().empty() && hdr.GetResource().back()=='H');
       NS_LOG_INFO("Client recv id=" << hdr.GetRequestId() << " hit=" << (hit?1:0));
-      m_csv << hdr.GetRequestId() << "," << content << "," << s.GetSeconds() << "," << r.GetSeconds()
-            << "," << lat_ms << "," << (hit?1:0) << "\n";
+      if (m_csv.is_open()) {
+        m_csv << hdr.GetRequestId() << "," << content << "," << s.GetSeconds() << "," << r.GetSeconds()
+              << "," << lat_ms << "," << (hit?1:0) << "\n";
+      }
 
       // Update per-content statistics
       auto& stats = m_contentStats[content];
