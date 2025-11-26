@@ -75,7 +75,7 @@ private:
   std::string m_resource{"/obj"};
   std::unordered_map<uint32_t, std::pair<Time, std::string>> m_sendTimes;
   std::ofstream m_csv;
-  std::string m_csvPath{"client_metrics.csv"};
+  std::string m_csvPath{""};
   std::string m_summaryCsvPath{""};
   std::unordered_map<std::string, ContentStats> m_contentStats;
   uint32_t m_nextId = 1;
