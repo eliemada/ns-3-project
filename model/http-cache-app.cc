@@ -85,6 +85,43 @@ Time HttpCacheApp::GetEffectiveTtl(const std::string& service) {
   return m_ttl;
 }
 
+void HttpCacheApp::EvaluatePolicy() {
+  if (!m_dynamicTtlEnabled) return;
+
+  Time now = Simulator::Now();
+  Time cutoff = now - m_ttlWindow;
+
+  // 1. Prune old buckets outside the window
+  while (!m_buckets.empty() && m_buckets.front().startTime < cutoff) {
+    m_buckets.pop_front();
+  }
+
+  // 2. Aggregate requests per service
+  std::unordered_map<std::string, uint32_t> totals;
+  uint32_t grandTotal = 0;
+  for (const auto& bucket : m_buckets) {
+    for (const auto& pair : bucket.serviceRequests) {
+      totals[pair.first] += pair.second;
+      grandTotal += pair.second;
+    }
+  }
+
+  // 3. Determine penalized services
+  m_penalizedServices.clear();
+  if (grandTotal > 0) {
+    for (const auto& pair : totals) {
+      double share = static_cast<double>(pair.second) / grandTotal;
+      if (share > m_ttlThreshold) {
+        m_penalizedServices.insert(pair.first);
+        NS_LOG_INFO("Dynamic TTL: service " << pair.first << " penalized (share=" << share << ")");
+      }
+    }
+  }
+
+  // 4. Schedule next evaluation
+  Simulator::Schedule(m_ttlEvalInterval, &HttpCacheApp::EvaluatePolicy, this);
+}
+
 void HttpCacheApp::StartApplication(){
   m_clientSock = Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
   m_clientSock->Bind(InetSocketAddress(Ipv4Address::GetAny(), m_listenPort));
