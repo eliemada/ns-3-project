@@ -60,6 +60,22 @@ std::string HttpCacheApp::ExtractService(const std::string& resource) {
   return resource.substr(start, end - start);
 }
 
+void HttpCacheApp::RecordRequest(const std::string& service) {
+  if (!m_dynamicTtlEnabled || service.empty()) return;
+
+  Time now = Simulator::Now();
+
+  // Create new bucket if needed
+  if (m_buckets.empty() || (now - m_buckets.back().startTime) >= m_bucketDuration) {
+    TimeBucket bucket;
+    bucket.startTime = now;
+    m_buckets.push_back(bucket);
+  }
+
+  // Increment count for this service in current bucket
+  m_buckets.back().serviceRequests[service]++;
+}
+
 void HttpCacheApp::StartApplication(){
   m_clientSock = Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
   m_clientSock->Bind(InetSocketAddress(Ipv4Address::GetAny(), m_listenPort));
