@@ -140,7 +140,17 @@ void HttpCacheApp::StartApplication(){
 void HttpCacheApp::StopApplication(){ if (m_clientSock) m_clientSock->Close(); if (m_originSock) m_originSock->Close(); }
 
 void HttpCacheApp::Touch(const std::string& key){
-  auto it = m_map.find(key); if (it==m_map.end()) return; m_lru.erase(it->second.it); m_lru.push_front(key); it->second.it = m_lru.begin();
+  auto it = m_map.find(key);
+  if (it == m_map.end()) return;
+
+  // Update LRU position
+  m_lru.erase(it->second.it);
+  m_lru.push_front(key);
+  it->second.it = m_lru.begin();
+
+  // Refresh TTL on access
+  std::string service = ExtractService(key);
+  it->second.expiry = Simulator::Now() + GetEffectiveTtl(service);
 }
 void HttpCacheApp::Insert(const std::string& key, const std::string& val){
   auto now = Simulator::Now();
