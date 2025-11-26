@@ -26,6 +26,26 @@ void HttpCacheApp::SetObjectSize(uint32_t size) {
   m_objectSize = size;
 }
 
+void HttpCacheApp::SetDynamicTtlEnabled(bool enabled) {
+  m_dynamicTtlEnabled = enabled;
+}
+
+void HttpCacheApp::SetTtlWindow(Time window) {
+  m_ttlWindow = window;
+}
+
+void HttpCacheApp::SetTtlThreshold(double threshold) {
+  m_ttlThreshold = threshold;
+}
+
+void HttpCacheApp::SetTtlReduction(double reduction) {
+  m_ttlReduction = reduction;
+}
+
+void HttpCacheApp::SetTtlEvalInterval(Time interval) {
+  m_ttlEvalInterval = interval;
+}
+
 void HttpCacheApp::StartApplication(){
   m_clientSock = Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
   m_clientSock->Bind(InetSocketAddress(Ipv4Address::GetAny(), m_listenPort));
