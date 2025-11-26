@@ -76,6 +76,15 @@ void HttpCacheApp::RecordRequest(const std::string& service) {
   m_buckets.back().serviceRequests[service]++;
 }
 
+Time HttpCacheApp::GetEffectiveTtl(const std::string& service) {
+  if (!m_dynamicTtlEnabled) return m_ttl;
+
+  if (m_penalizedServices.count(service) > 0) {
+    return m_ttl * (1.0 - m_ttlReduction);
+  }
+  return m_ttl;
+}
+
 void HttpCacheApp::StartApplication(){
   m_clientSock = Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
   m_clientSock->Bind(InetSocketAddress(Ipv4Address::GetAny(), m_listenPort));
