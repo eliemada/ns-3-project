@@ -4,6 +4,7 @@
 #include "ns3/address.h"
 #include "ns3/nstime.h"
 #include <unordered_map>
+#include <unordered_set>
 #include <list>
 #include <string>
 
@@ -24,6 +25,11 @@ public:
    * \param size Object size in bytes
    */
   void SetObjectSize(uint32_t size);
+  void SetDynamicTtlEnabled(bool enabled);
+  void SetTtlWindow(Time window);
+  void SetTtlThreshold(double threshold);
+  void SetTtlReduction(double reduction);
+  void SetTtlEvalInterval(Time interval);
 
 private:
   struct Entry { std::string value; Time expiry; std::list<std::string>::iterator it; };
@@ -34,6 +40,10 @@ private:
   void ReplyToClient(uint32_t reqId, const std::string& resource, bool hit, const Address& to);
   void Touch(const std::string& key);
   void Insert(const std::string& key, const std::string& val);
+  void RecordRequest(const std::string& service);
+  void EvaluatePolicy();
+  Time GetEffectiveTtl(const std::string& service);
+  std::string ExtractService(const std::string& resource);
 
   Ptr<Socket> m_clientSock; // listening for clients
   Ptr<Socket> m_originSock; // to talk to origin
@@ -53,6 +63,21 @@ private:
   // forwarding to origin: forwardId -> (originalReqId, client Address)
   uint32_t m_nextForwardId = 1;
   std::unordered_map<uint32_t, std::pair<uint32_t, Address>> m_forwarding;
+
+  // Dynamic TTL policy
+  struct TimeBucket {
+    Time startTime;
+    std::unordered_map<std::string, uint32_t> serviceRequests;
+  };
+  std::list<TimeBucket> m_buckets;
+  std::unordered_set<std::string> m_penalizedServices;
+
+  bool m_dynamicTtlEnabled = false;
+  Time m_ttlWindow{Seconds(300)};
+  double m_ttlThreshold = 0.5;
+  double m_ttlReduction = 0.5;
+  Time m_ttlEvalInterval{Seconds(30)};
+  Time m_bucketDuration{Seconds(10)};
 };
 
 } // namespace ns3

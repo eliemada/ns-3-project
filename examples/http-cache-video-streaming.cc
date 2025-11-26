@@ -27,6 +27,11 @@ int main(int argc, char** argv){
   uint32_t originDelay = 1; uint32_t cacheDelay = 1;
   uint32_t objectSize = 1024;
   uint32_t clientCacheBw = 100; uint32_t cacheOriginBw = 50;
+  bool dynamicTtl = false;
+  double ttlWindow = 300.0;
+  double ttlThreshold = 0.5;
+  double ttlReduction = 0.5;
+  double ttlEvalInterval = 30.0;
 
   CommandLine cmd;
   cmd.AddValue("numClients", "Number of concurrent clients", numClients);
@@ -49,6 +54,11 @@ int main(int argc, char** argv){
   cmd.AddValue("objectSize", "Object size in bytes (default 1024)", objectSize);
   cmd.AddValue("clientCacheBw", "Client-Cache link bandwidth (Mbps)", clientCacheBw);
   cmd.AddValue("cacheOriginBw", "Cache-Origin link bandwidth (Mbps)", cacheOriginBw);
+  cmd.AddValue("dynamicTtl", "Enable dynamic TTL policy", dynamicTtl);
+  cmd.AddValue("ttlWindow", "Dynamic TTL sliding window (seconds)", ttlWindow);
+  cmd.AddValue("ttlThreshold", "Request share threshold for TTL reduction (0.0-1.0)", ttlThreshold);
+  cmd.AddValue("ttlReduction", "TTL reduction factor when penalized (0.0-1.0)", ttlReduction);
+  cmd.AddValue("ttlEvalInterval", "Policy evaluation interval (seconds)", ttlEvalInterval);
   cmd.Parse(argc, argv);
 
   // Nodes
@@ -118,6 +128,13 @@ int main(int argc, char** argv){
   }
   std::cout << "  Object size: " << objectSize << " bytes" << std::endl;
   std::cout << "  Max objects: " << maxObjects << std::endl;
+  if (dynamicTtl) {
+    std::cout << "  Dynamic TTL: enabled" << std::endl;
+    std::cout << "    Window: " << ttlWindow << "s" << std::endl;
+    std::cout << "    Threshold: " << (ttlThreshold * 100) << "%" << std::endl;
+    std::cout << "    Reduction: " << (ttlReduction * 100) << "%" << std::endl;
+    std::cout << "    Eval interval: " << ttlEvalInterval << "s" << std::endl;
+  }
   Ptr<HttpCacheApp> cache = CreateObject<HttpCacheApp>();
   cache->SetListenPort(clientToCachePort);
   cache->SetOrigin(Address(cacheOriginInterfaces.GetAddress(1)), cacheToOriginPort);
@@ -125,6 +142,11 @@ int main(int argc, char** argv){
   cache->SetCapacity(maxObjects);
   cache->SetCacheDelay(MilliSeconds(cacheDelay));
   cache->SetObjectSize(objectSize);
+  cache->SetDynamicTtlEnabled(dynamicTtl);
+  cache->SetTtlWindow(Seconds(ttlWindow));
+  cache->SetTtlThreshold(ttlThreshold);
+  cache->SetTtlReduction(ttlReduction);
+  cache->SetTtlEvalInterval(Seconds(ttlEvalInterval));
   cacheNode->AddApplication(cache);
   cache->SetStartTime(Seconds(0.2));
   cache->SetStopTime(Seconds(totalTime + 1.0));
