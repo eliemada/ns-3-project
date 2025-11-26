@@ -31,6 +31,10 @@ public:
   void SetTtlReduction(double reduction);
   void SetTtlEvalInterval(Time interval);
 
+  // Progress tracking getters
+  uint64_t GetTotalRequests() const { return m_totalRequests; }
+  uint64_t GetTotalHits() const { return m_totalHits; }
+
 private:
   struct Entry { std::string value; Time expiry; std::list<std::string>::iterator it; };
   void StartApplication() override;
@@ -78,6 +82,10 @@ private:
   double m_ttlReduction = 0.5;
   Time m_ttlEvalInterval{Seconds(30)};
   Time m_bucketDuration{Seconds(10)};
+
+  // Progress tracking counters
+  uint64_t m_totalRequests = 0;
+  uint64_t m_totalHits = 0;
 };
 
 } // namespace ns3

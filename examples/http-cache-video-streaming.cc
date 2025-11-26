@@ -8,8 +8,33 @@
 #include "ns3/http-origin-app.h"
 #include <sstream>
 #include <vector>
+#include <iomanip>
 
 using namespace ns3;
+
+// Global variables for progress callback
+static Ptr<HttpCacheApp> g_cache;
+static double g_totalTime;
+static double g_progressInterval;
+
+void PrintProgress() {
+  double now = Simulator::Now().GetSeconds();
+  double pct = (now / g_totalTime) * 100.0;
+  uint64_t reqs = g_cache->GetTotalRequests();
+  uint64_t hits = g_cache->GetTotalHits();
+  double hitRate = (reqs > 0) ? (100.0 * hits / reqs) : 0.0;
+
+  std::cout << "[" << std::fixed << std::setprecision(0) << pct << "%] "
+            << std::setprecision(1) << now << "s/" << g_totalTime << "s | "
+            << reqs << " requests | "
+            << std::setprecision(1) << hitRate << "% hit rate"
+            << std::endl;
+
+  double nextTime = now + g_progressInterval;
+  if (nextTime <= g_totalTime) {
+    Simulator::Schedule(Seconds(g_progressInterval), &PrintProgress);
+  }
+}
 
 int main(int argc, char** argv){
   Time::SetResolution(Time::NS);
@@ -32,6 +57,7 @@ int main(int argc, char** argv){
   double ttlThreshold = 0.5;
   double ttlReduction = 0.5;
   double ttlEvalInterval = 30.0;
+  double progressInterval = 10.0; // percentage interval for progress updates
 
   CommandLine cmd;
   cmd.AddValue("numClients", "Number of concurrent clients", numClients);
@@ -59,6 +85,7 @@ int main(int argc, char** argv){
   cmd.AddValue("ttlThreshold", "Request share threshold for TTL reduction (0.0-1.0)", ttlThreshold);
   cmd.AddValue("ttlReduction", "TTL reduction factor when penalized (0.0-1.0)", ttlReduction);
   cmd.AddValue("ttlEvalInterval", "Policy evaluation interval (seconds)", ttlEvalInterval);
+  cmd.AddValue("progressInterval", "Progress update interval (percentage, default 10)", progressInterval);
   cmd.Parse(argc, argv);
 
   // Nodes
@@ -197,6 +224,14 @@ int main(int argc, char** argv){
   }
 
   std::cout << "Starting streaming simulation with " << numClients << " client(s) for " << totalTime << "s..." << std::endl;
+
+  // Set up progress tracking
+  g_cache = cache;
+  g_totalTime = totalTime;
+  g_progressInterval = (progressInterval / 100.0) * totalTime;
+  if (g_progressInterval > 0) {
+    Simulator::Schedule(Seconds(g_progressInterval), &PrintProgress);
+  }
 
   Simulator::Stop(Seconds(totalTime + 1.0));
   Simulator::Run();

@@ -169,10 +169,12 @@ void HttpCacheApp::HandleClientRead(Ptr<Socket> sock){
     std::string key = hdr.GetResource();
     std::string service = ExtractService(key);
     RecordRequest(service);
+    m_totalRequests++;
     auto it = m_map.find(key);
     auto now = Simulator::Now();
     if (it != m_map.end() && it->second.expiry > now){
       NS_LOG_INFO("Cache HIT key=" << key);
+      m_totalHits++;
       Touch(key);
       Simulator::Schedule(m_cacheDelay, &HttpCacheApp::ReplyToClient, this, hdr.GetRequestId(), key, true, from);
     } else {
