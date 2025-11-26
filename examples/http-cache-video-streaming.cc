@@ -20,7 +20,7 @@ int main(int argc, char** argv){
   double segmentInterval = 1.0; // seconds
   double cacheCapacityGB=1.0; double ttl=5.0;
   uint32_t cacheCapacityObjs = 0; // if >0, overrides cacheCapacityGB
-  std::string csv = "client_metrics.csv"; std::string summaryCsv = "";
+  std::string csv = ""; std::string summaryCsv = "";
   std::string globalSummaryCsv = "";
   std::string serviceSummaryCsv = "";
   bool zipf = false; double zipfS = 1.0;
@@ -42,7 +42,7 @@ int main(int argc, char** argv){
   cmd.AddValue("cacheCapacityGB", "Cache capacity in gigabytes", cacheCapacityGB);
   cmd.AddValue("cacheCapacityObjs", "Cache capacity in number of objects (overrides cacheCapacityGB)", cacheCapacityObjs);
   cmd.AddValue("ttl", "TTL seconds", ttl);
-  cmd.AddValue("csv", "Output CSV path", csv);
+  cmd.AddValue("csv", "Per-client CSV path (optional, disabled by default)", csv);
   cmd.AddValue("summaryCsv", "Summary statistics CSV path (optional)", summaryCsv);
   cmd.AddValue("globalSummaryCsv", "Global aggregated summary CSV path (optional)", globalSummaryCsv);
   cmd.AddValue("serviceSummaryCsv", "Service-level aggregated summary CSV path (optional)", serviceSummaryCsv);
