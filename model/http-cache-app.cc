@@ -46,6 +46,20 @@ void HttpCacheApp::SetTtlEvalInterval(Time interval) {
   m_ttlEvalInterval = interval;
 }
 
+std::string HttpCacheApp::ExtractService(const std::string& resource) {
+  // Parse "/service-X/seg-Y" -> "service-X"
+  // Or "/service-X" -> "service-X"
+  if (resource.empty()) return "";
+
+  size_t start = (resource[0] == '/') ? 1 : 0;
+  size_t end = resource.find('/', start);
+
+  if (end == std::string::npos) {
+    return resource.substr(start);
+  }
+  return resource.substr(start, end - start);
+}
+
 void HttpCacheApp::StartApplication(){
   m_clientSock = Socket::CreateSocket(GetNode(), UdpSocketFactory::GetTypeId());
   m_clientSock->Bind(InetSocketAddress(Ipv4Address::GetAny(), m_listenPort));
