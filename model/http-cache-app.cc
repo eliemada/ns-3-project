@@ -131,6 +131,11 @@ void HttpCacheApp::StartApplication(){
   m_originSock->Bind();
   m_originSock->Connect(InetSocketAddress(Ipv4Address::ConvertFrom(m_originAddr), m_originPort));
   m_originSock->SetRecvCallback(MakeCallback(&HttpCacheApp::HandleOriginRead, this));
+
+  // Start dynamic TTL policy evaluation if enabled
+  if (m_dynamicTtlEnabled) {
+    Simulator::Schedule(m_ttlEvalInterval, &HttpCacheApp::EvaluatePolicy, this);
+  }
 }
 void HttpCacheApp::StopApplication(){ if (m_clientSock) m_clientSock->Close(); if (m_originSock) m_originSock->Close(); }
 
@@ -143,7 +148,8 @@ void HttpCacheApp::Insert(const std::string& key, const std::string& val){
     std::string evictKey = m_lru.back(); m_lru.pop_back(); m_map.erase(evictKey);
   }
   m_lru.push_front(key);
-  m_map[key] = Entry{val, now + m_ttl, m_lru.begin()};
+  std::string service = ExtractService(key);
+  m_map[key] = Entry{val, now + GetEffectiveTtl(service), m_lru.begin()};
 }
 
 void HttpCacheApp::HandleClientRead(Ptr<Socket> sock){
@@ -151,6 +157,8 @@ void HttpCacheApp::HandleClientRead(Ptr<Socket> sock){
   while ((p = sock->RecvFrom(from))){
     HttpHeader hdr; p->RemoveHeader(hdr);
     std::string key = hdr.GetResource();
+    std::string service = ExtractService(key);
+    RecordRequest(service);
     auto it = m_map.find(key);
     auto now = Simulator::Now();
     if (it != m_map.end() && it->second.expiry > now){
