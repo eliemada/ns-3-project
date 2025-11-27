@@ -88,14 +88,22 @@ int main(int argc, char** argv){
   cmd.AddValue("progressInterval", "Progress update interval (percentage, default 10)", progressInterval);
   cmd.Parse(argc, argv);
 
+  // Setup progress tracking
+  bool verboseSetup = (numClients >= 1000);
+  uint32_t progressStep = std::max(1u, numClients / 10);
+
   // Nodes
+  if (verboseSetup) std::cout << "Setup: Creating " << numClients << " client nodes..." << std::flush;
   NodeContainer clientNodes; clientNodes.Create(numClients);
   NodeContainer serverNodes; serverNodes.Create(2);
   NodeContainer allNodes; allNodes.Add(clientNodes); allNodes.Add(serverNodes);
   Ptr<Node> cacheNode = serverNodes.Get(0);
   Ptr<Node> originNode = serverNodes.Get(1);
+  if (verboseSetup) std::cout << " done" << std::endl;
 
+  if (verboseSetup) std::cout << "Setup: Installing internet stack..." << std::flush;
   InternetStackHelper internet; internet.Install(allNodes);
+  if (verboseSetup) std::cout << " done" << std::endl;
 
   // Links
   PointToPointHelper p2pClientCache;
@@ -112,19 +120,26 @@ int main(int argc, char** argv){
   std::vector<Ipv4InterfaceContainer> clientCacheInterfaces(numClients);
   Ipv4AddressHelper ip;
 
+  if (verboseSetup) std::cout << "Setup: Creating " << numClients << " client-cache links..." << std::flush;
   for (uint32_t i = 0; i < numClients; ++i) {
     clientCacheDevices[i] = p2pClientCache.Install(clientNodes.Get(i), cacheNode);
     std::ostringstream subnet;
     subnet << "10." << (i / 256) << "." << (i % 256) << ".0";
     ip.SetBase(subnet.str().c_str(), "255.255.255.0");
     clientCacheInterfaces[i] = ip.Assign(clientCacheDevices[i]);
+    if (verboseSetup && (i + 1) % progressStep == 0) {
+      std::cout << " " << ((i + 1) * 100 / numClients) << "%" << std::flush;
+    }
   }
+  if (verboseSetup) std::cout << " done" << std::endl;
 
   NetDeviceContainer cacheOriginDevices = p2pCacheOrigin.Install(cacheNode, originNode);
   ip.SetBase("192.168.1.0", "255.255.255.0");
   Ipv4InterfaceContainer cacheOriginInterfaces = ip.Assign(cacheOriginDevices);
 
+  if (verboseSetup) std::cout << "Setup: Building routing tables..." << std::flush;
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+  if (verboseSetup) std::cout << " done" << std::endl;
 
   uint16_t clientToCachePort = 8080; uint16_t cacheToOriginPort = 8081;
 
@@ -179,6 +194,7 @@ int main(int argc, char** argv){
   cache->SetStopTime(Seconds(totalTime + 1.0));
 
   // Clients
+  if (verboseSetup) std::cout << "Setup: Creating " << numClients << " client applications..." << std::flush;
   std::vector<Ptr<HttpClientApp>> clientApps;
   for (uint32_t i = 0; i < numClients; ++i) {
     Ptr<HttpClientApp> client = CreateObject<HttpClientApp>();
@@ -221,7 +237,11 @@ int main(int argc, char** argv){
     client->SetStartTime(Seconds(0.3));
     client->SetStopTime(Seconds(totalTime + 1.0));
     clientApps.push_back(client);
+    if (verboseSetup && (i + 1) % progressStep == 0) {
+      std::cout << " " << ((i + 1) * 100 / numClients) << "%" << std::flush;
+    }
   }
+  if (verboseSetup) std::cout << " done" << std::endl;
 
   std::cout << "Starting streaming simulation with " << numClients << " client(s) for " << totalTime << "s..." << std::endl;
 
