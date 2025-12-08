@@ -150,16 +150,23 @@ void HttpCacheApp::Touch(const std::string& key){
 
   // Refresh TTL on access
   std::string service = ExtractService(key);
-  it->second.expiry = Simulator::Now() + GetEffectiveTtl(service);
+  Time oldExpiry = it->second.expiry;
+  Time newTtl = GetEffectiveTtl(service);
+  it->second.expiry = Simulator::Now() + newTtl;
+  NS_LOG_INFO("TOUCH: Refreshed TTL for " << key << " from " << oldExpiry.GetSeconds() << "s to " << it->second.expiry.GetSeconds() << "s (new TTL=" << newTtl.GetSeconds() << "s)");
 }
 void HttpCacheApp::Insert(const std::string& key, const std::string& val){
   auto now = Simulator::Now();
   if (m_map.size() >= m_capacity){ // evict LRU
-    std::string evictKey = m_lru.back(); m_lru.pop_back(); m_map.erase(evictKey);
+    std::string evictKey = m_lru.back();
+    NS_LOG_INFO("EVICTION: Evicting " << evictKey << " to make room for " << key << " (cache full at " << m_capacity << " items)");
+    m_lru.pop_back(); m_map.erase(evictKey);
   }
   m_lru.push_front(key);
   std::string service = ExtractService(key);
-  m_map[key] = Entry{val, now + GetEffectiveTtl(service), m_lru.begin()};
+  Time ttl = GetEffectiveTtl(service);
+  m_map[key] = Entry{val, now + ttl, m_lru.begin()};
+  NS_LOG_INFO("INSERT: Cached " << key << " with TTL=" << ttl.GetSeconds() << "s (expires at " << (now + ttl).GetSeconds() << "s)");
 }
 
 void HttpCacheApp::HandleClientRead(Ptr<Socket> sock){
@@ -173,22 +180,39 @@ void HttpCacheApp::HandleClientRead(Ptr<Socket> sock){
     auto it = m_map.find(key);
     auto now = Simulator::Now();
     if (it != m_map.end() && it->second.expiry > now){
-      NS_LOG_INFO("Cache HIT key=" << key);
+      NS_LOG_INFO("Cache HIT key=" << key << " at time=" << now.GetSeconds() << "s (expires at " << it->second.expiry.GetSeconds() << "s)");
       m_totalHits++;
       Touch(key);
       Simulator::Schedule(m_cacheDelay, &HttpCacheApp::ReplyToClient, this, hdr.GetRequestId(), key, true, from);
     } else {
-      NS_LOG_INFO("Cache MISS key=" << key);
-      // miss -> forward to origin. Use a unique forward id to avoid collisions
-      // between clients that may reuse the same numeric request id.
-      uint32_t origReqId = hdr.GetRequestId();
-      uint32_t fid = m_nextForwardId++;
-      m_forwarding[fid] = std::make_pair(origReqId, from);
-      // replace header request id with forward id when sending to origin
-      HttpHeader fhdr(fid, key);
-      Ptr<Packet> fwd = Create<Packet>(m_objectSize);
-      fwd->AddHeader(fhdr);
-      m_originSock->Send(fwd);
+      if (it != m_map.end()) {
+        NS_LOG_INFO("Cache MISS (EXPIRED) key=" << key << " at time=" << now.GetSeconds() << "s (expired at " << it->second.expiry.GetSeconds() << "s, age=" << (now - it->second.expiry).GetSeconds() << "s)");
+      } else {
+        NS_LOG_INFO("Cache MISS (NOT FOUND) key=" << key << " at time=" << now.GetSeconds() << "s");
+      }
+
+      // Check if this resource is already being fetched
+      auto pendingIt = m_pendingRequests.find(key);
+      if (pendingIt != m_pendingRequests.end()) {
+        // Already pending - add this client to the waiting list
+        NS_LOG_INFO("PENDING: Request for " << key << " already in flight, adding client to waiting list (now " << (pendingIt->second.size() + 1) << " waiting)");
+        pendingIt->second.push_back(std::make_pair(hdr.GetRequestId(), from));
+      } else {
+        // First request for this resource - send to origin
+        NS_LOG_INFO("FORWARD: Sending first request for " << key << " to origin");
+        uint32_t origReqId = hdr.GetRequestId();
+        uint32_t fid = m_nextForwardId++;
+        m_forwarding[fid] = std::make_pair(origReqId, from);
+
+        // Mark this resource as pending
+        m_pendingRequests[key] = std::vector<std::pair<uint32_t, Address>>();
+
+        // Replace header request id with forward id when sending to origin
+        HttpHeader fhdr(fid, key);
+        Ptr<Packet> fwd = Create<Packet>(m_objectSize);
+        fwd->AddHeader(fhdr);
+        m_originSock->Send(fwd);
+      }
     }
   }
 }
@@ -208,6 +232,16 @@ void HttpCacheApp::HandleOriginRead(Ptr<Socket> sock){
       Address clientAddr = itf->second.second;
       ReplyToClient(origReqId, key, false, clientAddr);
       m_forwarding.erase(itf);
+    }
+
+    // Serve all clients waiting for this resource
+    auto pendingIt = m_pendingRequests.find(key);
+    if (pendingIt != m_pendingRequests.end()) {
+      NS_LOG_INFO("SERVING PENDING: Responding to " << pendingIt->second.size() << " waiting clients for " << key);
+      for (const auto& waiting : pendingIt->second) {
+        ReplyToClient(waiting.first, key, false, waiting.second);
+      }
+      m_pendingRequests.erase(pendingIt);
     }
   }
 }

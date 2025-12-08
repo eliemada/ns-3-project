@@ -68,6 +68,9 @@ private:
   uint32_t m_nextForwardId = 1;
   std::unordered_map<uint32_t, std::pair<uint32_t, Address>> m_forwarding;
 
+  // Pending request tracking: resource -> list of (reqId, clientAddr) waiting for it
+  std::unordered_map<std::string, std::vector<std::pair<uint32_t, Address>>> m_pendingRequests;
+
   // Dynamic TTL policy
   struct TimeBucket {
     Time startTime;
